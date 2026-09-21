@@ -192,7 +192,9 @@ async function runValidation() {
   // ---------------------------------------------------------------------------
   // PHASE 2: SUBMIT REAL APPLICANTS VIA ACTUAL APPLICATION FLOW
   // ---------------------------------------------------------------------------
-  console.log("\n>>> PHASE 2: Submitting realistic applications through /api/public/applications...");
+  console.log(
+    "\n>>> PHASE 2: Submitting realistic applications through /api/public/applications...",
+  );
 
   const testScenarios = [
     {
@@ -373,7 +375,9 @@ async function runValidation() {
   const evaluationRecords = [];
 
   for (const scenario of testScenarios) {
-    console.log(`\n--------------------------------------------------------------------------------`);
+    console.log(
+      `\n--------------------------------------------------------------------------------`,
+    );
     console.log(`Testing Scenario: ${scenario.scenarioName}`);
     console.log(`Candidate: ${scenario.fullName} -> Job: ${scenario.jobCode}`);
 
@@ -422,7 +426,9 @@ async function runValidation() {
     }
 
     const postResult = await response.json();
-    console.log(`  [Application Submitted] Application Code: ${postResult.applicationId} (${elapsed}ms)`);
+    console.log(
+      `  [Application Submitted] Application Code: ${postResult.applicationId} (${elapsed}ms)`,
+    );
 
     // Fetch the candidate from DB
     const { data: candidate, error: candError } = await supabaseAdmin
@@ -476,19 +482,27 @@ async function runValidation() {
     console.log(`Candidate:   ${candidate.full_name} (${candidate.email})`);
     console.log(`Job Opening: ${scenario.jobCode} - ${candidate.applied_role}`);
     console.log(`ATS Status:  ${candidate.ats_status}`);
-    console.log(`Score:       ${candidate.ats_score} / 100  |  Category: ${candidate.ats_category}`);
+    console.log(
+      `Score:       ${candidate.ats_score} / 100  |  Category: ${candidate.ats_category}`,
+    );
     console.log(`App Status:  ${candidate.application_status}  |  Stage: ${candidate.stage}`);
-    console.log(`Invite:      ${invite ? `Token Created (${invite.token.slice(0, 8)}...)` : "No invite (filtered)"}`);
+    console.log(
+      `Invite:      ${invite ? `Token Created (${invite.token.slice(0, 8)}...)` : "No invite (filtered)"}`,
+    );
     console.log(`-------------------------------------------------------------------`);
 
     console.log("Component Breakdown:");
     let manualSum = 0;
     for (const b of breakdown) {
-      console.log(`  - ${b.label.padEnd(42)}: Score ${String(b.score).padStart(3)}% (Weight: ${b.weight}%) => ${((b.score / 100) * b.weight).toFixed(1)} pts | Reason: ${b.reason}`);
+      console.log(
+        `  - ${b.label.padEnd(42)}: Score ${String(b.score).padStart(3)}% (Weight: ${b.weight}%) => ${((b.score / 100) * b.weight).toFixed(1)} pts | Reason: ${b.reason}`,
+      );
       manualSum += (b.score / 100) * b.weight;
     }
     const roundedManualSum = Math.round(manualSum);
-    console.log(`Manual Sum of Components: ${manualSum.toFixed(2)} pts => Rounded: ${roundedManualSum}`);
+    console.log(
+      `Manual Sum of Components: ${manualSum.toFixed(2)} pts => Rounded: ${roundedManualSum}`,
+    );
     console.log(`Database ATS Score:       ${candidate.ats_score}`);
     const scoreMatches = roundedManualSum === candidate.ats_score;
     console.log(`Score Match Exact:        ${scoreMatches ? "PASS (Exact match)" : "FAIL"}`);
@@ -534,7 +548,9 @@ async function runValidation() {
       console.log("\nFalse-Positive Technology Guardrail Check:");
       for (const forbidden of scenario.mustNotMatch) {
         const wronglyMatched = candidate.matched_required_skills?.includes(forbidden);
-        console.log(`  Checking forbidden match '${forbidden}': ${wronglyMatched ? "FAILED (Wrongly matched!)" : "PASSED (Correctly rejected)"}`);
+        console.log(
+          `  Checking forbidden match '${forbidden}': ${wronglyMatched ? "FAILED (Wrongly matched!)" : "PASSED (Correctly rejected)"}`,
+        );
         if (wronglyMatched) {
           results.defects.push({
             scenario: scenario.scenarioName,
@@ -591,9 +607,15 @@ async function runValidation() {
     return score >= 85 ? "shortlisted" : "filtered_out";
   };
 
-  console.log(`  Score 84: decision = '${shortlistDecision(84)}' [${shortlistDecision(84) === "filtered_out" ? "PASS" : "FAIL"}]`);
-  console.log(`  Score 85: decision = '${shortlistDecision(85)}' [${shortlistDecision(85) === "shortlisted" ? "PASS" : "FAIL"}]`);
-  console.log(`  Score 86: decision = '${shortlistDecision(86)}' [${shortlistDecision(86) === "shortlisted" ? "PASS" : "FAIL"}]`);
+  console.log(
+    `  Score 84: decision = '${shortlistDecision(84)}' [${shortlistDecision(84) === "filtered_out" ? "PASS" : "FAIL"}]`,
+  );
+  console.log(
+    `  Score 85: decision = '${shortlistDecision(85)}' [${shortlistDecision(85) === "shortlisted" ? "PASS" : "FAIL"}]`,
+  );
+  console.log(
+    `  Score 86: decision = '${shortlistDecision(86)}' [${shortlistDecision(86) === "shortlisted" ? "PASS" : "FAIL"}]`,
+  );
 
   // Verify that database records with score < 85 are filtered out and >= 85 are shortlisted
   const { data: c84 } = await supabaseAdmin
@@ -607,8 +629,12 @@ async function runValidation() {
     .eq("email", "sarah.jenkins.e2e@example.com")
     .single();
 
-  console.log(`  DB Verification Candidate 84 (<85, score ${c84?.ats_score}): status = '${c84?.application_status}', stage = '${c84?.stage}' [${c84?.application_status === "filtered_out" ? "PASS" : "FAIL"}]`);
-  console.log(`  DB Verification Candidate 85+ (>=85, score ${c85?.ats_score}): status = '${c85?.application_status}', stage = '${c85?.stage}' [${c85?.stage === "shortlisted" ? "PASS" : "FAIL"}]`);
+  console.log(
+    `  DB Verification Candidate 84 (<85, score ${c84?.ats_score}): status = '${c84?.application_status}', stage = '${c84?.stage}' [${c84?.application_status === "filtered_out" ? "PASS" : "FAIL"}]`,
+  );
+  console.log(
+    `  DB Verification Candidate 85+ (>=85, score ${c85?.ats_score}): status = '${c85?.application_status}', stage = '${c85?.stage}' [${c85?.stage === "shortlisted" ? "PASS" : "FAIL"}]`,
+  );
 
   // ---------------------------------------------------------------------------
   // PHASE 6: REAL RESUME EXTRACTION QUALITY ACROSS FORMATS & STRUCTURES
@@ -628,7 +654,9 @@ async function runValidation() {
       const result = await mammoth.extractRawText({ buffer: Buffer.from(bytes) });
       return result.value;
     } else {
-      throw new Error("This resume format cannot be read automatically. Ask the candidate for a PDF or DOCX file.");
+      throw new Error(
+        "This resume format cannot be read automatically. Ask the candidate for a PDF or DOCX file.",
+      );
     }
   }
 
@@ -641,7 +669,9 @@ async function runValidation() {
     "Skills: React, Node.js, TypeScript",
   ]);
   const pdfExtracted = await extractResumeTextNode(new Uint8Array(pdfSample), "pdf");
-  console.log(`  1. PDF Normal Text Extraction:  length = ${pdfExtracted.length} chars [${pdfExtracted.length > 50 && pdfExtracted.includes("React") ? "PASS" : "FAIL"}]`);
+  console.log(
+    `  1. PDF Normal Text Extraction:  length = ${pdfExtracted.length} chars [${pdfExtracted.length > 50 && pdfExtracted.includes("React") ? "PASS" : "FAIL"}]`,
+  );
 
   // 2. DOCX Normal Text
   const docxSample = await createDocxBuffer([
@@ -652,7 +682,9 @@ async function runValidation() {
     "Skills: Docker, AWS, Python",
   ]);
   const docxExtracted = await extractResumeTextNode(new Uint8Array(docxSample), "docx");
-  console.log(`  2. DOCX Normal Text Extraction: length = ${docxExtracted.length} chars [${docxExtracted.length > 50 && docxExtracted.includes("Docker") ? "PASS" : "FAIL"}]`);
+  console.log(
+    `  2. DOCX Normal Text Extraction: length = ${docxExtracted.length} chars [${docxExtracted.length > 50 && docxExtracted.includes("Docker") ? "PASS" : "FAIL"}]`,
+  );
 
   // 3. Legacy DOC rejection / handling
   let docHandledProperly = false;
@@ -661,7 +693,9 @@ async function runValidation() {
   } catch (err) {
     docHandledProperly = err.message.includes("PDF or DOCX");
   }
-  console.log(`  3. Legacy DOC Safe Fallback:     ${docHandledProperly ? "PASS (Properly prompts for modern PDF/DOCX)" : "FAIL"}`);
+  console.log(
+    `  3. Legacy DOC Safe Fallback:     ${docHandledProperly ? "PASS (Properly prompts for modern PDF/DOCX)" : "FAIL"}`,
+  );
 
   // 4. Resume with tables (DOCX table structure)
   const zipTable = new JSZip();
@@ -686,7 +720,9 @@ async function runValidation() {
   );
   const tableDocx = await zipTable.generateAsync({ type: "nodebuffer" });
   const tableExtracted = await extractResumeTextNode(new Uint8Array(tableDocx), "docx");
-  console.log(`  4. Table Resume Extraction:      React present = ${tableExtracted.includes("React")}, PostgreSQL present = ${tableExtracted.includes("PostgreSQL")} [${tableExtracted.includes("React") && tableExtracted.includes("PostgreSQL") ? "PASS" : "FAIL"}]`);
+  console.log(
+    `  4. Table Resume Extraction:      React present = ${tableExtracted.includes("React")}, PostgreSQL present = ${tableExtracted.includes("PostgreSQL")} [${tableExtracted.includes("React") && tableExtracted.includes("PostgreSQL") ? "PASS" : "FAIL"}]`,
+  );
 
   // 5. Multi-column / bullet resume
   const bulletResume = [
@@ -705,7 +741,9 @@ async function runValidation() {
   ];
   const bulletBuf = createPdfBuffer(bulletResume);
   const bulletExtracted = await extractResumeTextNode(new Uint8Array(bulletBuf), "pdf");
-  console.log(`  5. Bullet / Column Format:       length = ${bulletExtracted.length} chars, Docker present = ${bulletExtracted.includes("Docker")} [${bulletExtracted.includes("Docker") ? "PASS" : "FAIL"}]`);
+  console.log(
+    `  5. Bullet / Column Format:       length = ${bulletExtracted.length} chars, Docker present = ${bulletExtracted.includes("Docker")} [${bulletExtracted.includes("Docker") ? "PASS" : "FAIL"}]`,
+  );
 
   // 6. Skills only in project descriptions
   const projResume = [
@@ -719,13 +757,19 @@ async function runValidation() {
   ];
   const projBuf = createPdfBuffer(projResume);
   const projExtracted = await extractResumeTextNode(new Uint8Array(projBuf), "pdf");
-  console.log(`  6. Skills in Projects:           React present = ${projExtracted.includes("React")}, Node.js present = ${projExtracted.includes("Node.js")} [${projExtracted.includes("React") && projExtracted.includes("Node.js") ? "PASS" : "FAIL"}]`);
+  console.log(
+    `  6. Skills in Projects:           React present = ${projExtracted.includes("React")}, Node.js present = ${projExtracted.includes("Node.js")} [${projExtracted.includes("React") && projExtracted.includes("Node.js") ? "PASS" : "FAIL"}]`,
+  );
 
   // 7. Missing dates detection
-  console.log(`  7. Missing Dates Detection:      Tested & verified in unit test suite with dates_uncertain = true without guessing [PASS]`);
+  console.log(
+    `  7. Missing Dates Detection:      Tested & verified in unit test suite with dates_uncertain = true without guessing [PASS]`,
+  );
 
   // 8. Overlapping employment merging
-  console.log(`  8. Overlapping Dates Merging:    Tested & verified in Scenario 5 (Elena Rostova: 8.6 yrs non-overlapping merged history) [PASS]`);
+  console.log(
+    `  8. Overlapping Dates Merging:    Tested & verified in Scenario 5 (Elena Rostova: 8.6 yrs non-overlapping merged history) [PASS]`,
+  );
 
   // ---------------------------------------------------------------------------
   // PHASE 7: AI FALLBACK & DETERMINISTIC INVARIANCE
@@ -765,7 +809,10 @@ async function runValidation() {
   offlineForm.append("source", "LinkedIn");
   offlineForm.append("resume", new File([offlinePdf], "resume.pdf", { type: "application/pdf" }));
 
-  const offRes = await fetch(`${BASE_URL}/api/public/applications`, { method: "POST", body: offlineForm });
+  const offRes = await fetch(`${BASE_URL}/api/public/applications`, {
+    method: "POST",
+    body: offlineForm,
+  });
   console.log(`  Offline Test Application Submitted: status ${offRes.status}`);
 
   const { data: offCand } = await supabaseAdmin
@@ -777,7 +824,9 @@ async function runValidation() {
   console.log(`  Offline Candidate ATS Score:  ${offCand?.ats_score} / 100`);
   console.log(`  Offline Candidate ATS Status: ${offCand?.ats_status}`);
   console.log(`  Offline Candidate Stage:      ${offCand?.stage}`);
-  console.log(`  Offline Deterministic Pass:   ${offCand?.ats_score >= 85 && offCand?.ats_status === "completed" ? "PASS" : "FAIL"}`);
+  console.log(
+    `  Offline Deterministic Pass:   ${offCand?.ats_score >= 85 && offCand?.ats_status === "completed" ? "PASS" : "FAIL"}`,
+  );
 
   // ---------------------------------------------------------------------------
   // PHASE 8: SECURITY & ACCESS CONTROL VERIFICATION
@@ -790,13 +839,17 @@ async function runValidation() {
   const { data: anonCandidates } = await supabaseAnon
     .from("candidates")
     .select("id, full_name, email, ats_score, ats_breakdown");
-  console.log(`  1. Anon Read Candidates Table:     rows returned = ${anonCandidates?.length || 0} [${!anonCandidates || anonCandidates.length === 0 ? "PASS (Access Blocked by RLS)" : "FAIL"}]`);
+  console.log(
+    `  1. Anon Read Candidates Table:     rows returned = ${anonCandidates?.length || 0} [${!anonCandidates || anonCandidates.length === 0 ? "PASS (Access Blocked by RLS)" : "FAIL"}]`,
+  );
 
   // 2. Anonymous applicant cannot read ats_evaluations
   const { data: anonEvals } = await supabaseAnon
     .from("ats_evaluations")
     .select("id, ats_score, result");
-  console.log(`  2. Anon Read ATS Evaluations:      rows returned = ${anonEvals?.length || 0} [${!anonEvals || anonEvals.length === 0 ? "PASS (Access Blocked by RLS)" : "FAIL"}]`);
+  console.log(
+    `  2. Anon Read ATS Evaluations:      rows returned = ${anonEvals?.length || 0} [${!anonEvals || anonEvals.length === 0 ? "PASS (Access Blocked by RLS)" : "FAIL"}]`,
+  );
 
   // 3. Anonymous applicant cannot modify candidate ATS score or status
   const testCandidateId = evaluationRecords[0]?.candidate?.id;
@@ -805,14 +858,16 @@ async function runValidation() {
     .update({ ats_score: 100, application_status: "shortlisted" })
     .eq("id", testCandidateId)
     .select();
-  console.log(`  3. Anon Tamper ATS Score / Status: rows updated = ${hackAttempt?.length || 0} [${!hackAttempt || hackAttempt.length === 0 ? "PASS (Tampering Blocked by RLS)" : "FAIL"}]`);
+  console.log(
+    `  3. Anon Tamper ATS Score / Status: rows updated = ${hackAttempt?.length || 0} [${!hackAttempt || hackAttempt.length === 0 ? "PASS (Tampering Blocked by RLS)" : "FAIL"}]`,
+  );
 
   // 4. Anonymous applicant cannot directly download another candidate's resume from storage
   const resumePath = evaluationRecords[0]?.candidate?.resume_path;
-  const { data: blobData } = await supabaseAnon.storage
-    .from("resumes")
-    .download(resumePath);
-  console.log(`  4. Anon Direct Resume Download:    downloaded = ${!!blobData} [${!blobData ? "PASS (Direct Storage Access Blocked)" : "FAIL"}]`);
+  const { data: blobData } = await supabaseAnon.storage.from("resumes").download(resumePath);
+  console.log(
+    `  4. Anon Direct Resume Download:    downloaded = ${!!blobData} [${!blobData ? "PASS (Direct Storage Access Blocked)" : "FAIL"}]`,
+  );
 
   // 5. Authorized HR Staff read verification
   const { data: staffCand } = await supabaseAdmin
@@ -820,7 +875,9 @@ async function runValidation() {
     .select("id, full_name, ats_score, ats_breakdown")
     .eq("id", testCandidateId)
     .single();
-  console.log(`  5. HR Staff Read ATS Information:  score = ${staffCand?.ats_score}, breakdown rows = ${staffCand?.ats_breakdown?.length || 0} [${staffCand && staffCand.ats_score != null ? "PASS (Authorized Access Granted)" : "FAIL"}]`);
+  console.log(
+    `  5. HR Staff Read ATS Information:  score = ${staffCand?.ats_score}, breakdown rows = ${staffCand?.ats_breakdown?.length || 0} [${staffCand && staffCand.ats_score != null ? "PASS (Authorized Access Granted)" : "FAIL"}]`,
+  );
 
   // ---------------------------------------------------------------------------
   // SUMMARY

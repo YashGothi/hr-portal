@@ -68,7 +68,9 @@ async function testSupabaseKeyDirectly(url: string, key: string) {
     );
 
     // Check publishable key REST test as requested
-    const pubKey = sanitizeEnv(process.env["SUPABASE_PUBLISHABLE_KEY"]);
+    const pubKey = sanitizeEnv(
+      process.env["SUPABASE_PUBLISHABLE_KEY"] || process.env["VITE_SUPABASE_PUBLISHABLE_KEY"],
+    );
     if (pubKey) {
       const resPub = await fetch(tableUrl, {
         method: "GET",

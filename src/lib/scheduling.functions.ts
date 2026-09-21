@@ -63,7 +63,9 @@ export const ensureSchedulingInvite = createServerFn({ method: "POST" })
           .eq("id", existing.id)
           .select("token")
           .single();
-        if (reviveError) throw new Error("Could not refresh the scheduling link");
+        if (reviveError) {
+          throw new Error(`Could not refresh the scheduling link: ${reviveError.message}`);
+        }
         return { token: revived.token, appointmentType: data.appointmentType };
       }
       return { token: existing.token, appointmentType: data.appointmentType };
@@ -76,7 +78,9 @@ export const ensureSchedulingInvite = createServerFn({ method: "POST" })
         .eq("id", existing.id)
         .select("token")
         .single();
-      if (rotateError) throw new Error("Could not refresh the scheduling link");
+      if (rotateError) {
+        throw new Error(`Could not refresh the scheduling link: ${rotateError.message}`);
+      }
       return { token: rotated.token, appointmentType: data.appointmentType };
     }
 
@@ -90,7 +94,11 @@ export const ensureSchedulingInvite = createServerFn({ method: "POST" })
       })
       .select("token")
       .single();
-    if (createError || !created) throw new Error("Could not create the scheduling link");
+    if (createError || !created) {
+      throw new Error(
+        `Could not create the scheduling link${createError?.message ? `: ${createError.message}` : ""}`,
+      );
+    }
     return { token: created.token, appointmentType: data.appointmentType };
   });
 

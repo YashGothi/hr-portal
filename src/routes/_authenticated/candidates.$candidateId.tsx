@@ -10,6 +10,7 @@ import { AtsAnalysis } from "@/components/AtsAnalysis";
 import { AppShell } from "@/components/AppShell";
 import { CandidateTimeline } from "@/components/CandidateTimeline";
 import { CandidateScheduling } from "@/components/CandidateScheduling";
+import { CandidateOffer } from "@/components/CandidateOffer";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -369,7 +370,7 @@ function CandidateDetail() {
           <CandidateTimeline candidate={person} history={history.data ?? []} />
         </section>
 
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-5">
           <CandidateScheduling
             candidateId={person.id}
             candidateName={person.full_name}
@@ -377,6 +378,13 @@ function CandidateDetail() {
             atsScore={person.ats_score}
             applicationStatus={person.application_status}
             stage={person.stage}
+          />
+
+          <CandidateOffer
+            candidateId={person.id}
+            candidateName={person.full_name}
+            jobTitle={person.applied_role}
+            jobId={person.job_id}
           />
         </div>
 

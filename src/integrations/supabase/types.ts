@@ -784,6 +784,141 @@ export type Database = {
         };
         Relationships: [];
       };
+      offers: {
+        Row: {
+          accepted_at: string | null;
+          candidate_id: string;
+          compensation: number;
+          created_at: string;
+          created_by: string | null;
+          currency: string;
+          declined_at: string | null;
+          expires_at: string;
+          id: string;
+          job_id: string | null;
+          notes: string | null;
+          secure_token: string;
+          sent_at: string | null;
+          start_date: string;
+          status: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REVOKED";
+          updated_at: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          candidate_id: string;
+          compensation: number;
+          created_at?: string;
+          created_by?: string | null;
+          currency?: string;
+          declined_at?: string | null;
+          expires_at: string;
+          id?: string;
+          job_id?: string | null;
+          notes?: string | null;
+          secure_token?: string;
+          sent_at?: string | null;
+          start_date: string;
+          status?: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REVOKED";
+          updated_at?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          candidate_id?: string;
+          compensation?: number;
+          created_at?: string;
+          created_by?: string | null;
+          currency?: string;
+          declined_at?: string | null;
+          expires_at?: string;
+          id?: string;
+          job_id?: string | null;
+          notes?: string | null;
+          secure_token?: string;
+          sent_at?: string | null;
+          start_date?: string;
+          status?: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REVOKED";
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "offers_candidate_id_fkey";
+            columns: ["candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "offers_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "jobs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      offer_events: {
+        Row: {
+          candidate_id: string;
+          created_at: string;
+          created_by: string | null;
+          event_type:
+            | "OFFER_CREATED"
+            | "OFFER_SENT"
+            | "OFFER_ACCEPTED"
+            | "OFFER_DECLINED"
+            | "OFFER_EXPIRED"
+            | "OFFER_REVOKED";
+          id: string;
+          notes: string | null;
+          offer_id: string;
+        };
+        Insert: {
+          candidate_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          event_type:
+            | "OFFER_CREATED"
+            | "OFFER_SENT"
+            | "OFFER_ACCEPTED"
+            | "OFFER_DECLINED"
+            | "OFFER_EXPIRED"
+            | "OFFER_REVOKED";
+          id?: string;
+          notes?: string | null;
+          offer_id: string;
+        };
+        Update: {
+          candidate_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          event_type?:
+            | "OFFER_CREATED"
+            | "OFFER_SENT"
+            | "OFFER_ACCEPTED"
+            | "OFFER_DECLINED"
+            | "OFFER_EXPIRED"
+            | "OFFER_REVOKED";
+          id?: string;
+          notes?: string | null;
+          offer_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "offer_events_candidate_id_fkey";
+            columns: ["candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "offer_events_offer_id_fkey";
+            columns: ["offer_id"];
+            isOneToOne: false;
+            referencedRelation: "offers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;

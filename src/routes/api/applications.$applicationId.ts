@@ -11,8 +11,15 @@ export const Route = createFileRoute("/api/applications/$applicationId")({
         const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
         if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-        const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
-        const supabase = createClient<Database>(process.env["SUPABASE_URL"]!, key, {
+        const key =
+          process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+          process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+          "";
+        const url = process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"] || "";
+        if (!key || !url) {
+          return Response.json({ error: "Server configuration missing" }, { status: 500 });
+        }
+        const supabase = createClient<Database>(url, key, {
           auth: { persistSession: false, autoRefreshToken: false },
           global: {
             fetch: (input, init) => {

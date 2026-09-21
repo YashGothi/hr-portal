@@ -20,6 +20,7 @@ import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/j
 import { Route as AuthenticatedSchedulingRouteImport } from './routes/_authenticated/scheduling'
 import { Route as ApplyJobCodeRouteImport } from './routes/apply.$jobCode'
 import { Route as ConfirmTokenRouteImport } from './routes/confirm.$token'
+import { Route as OfferTokenRouteImport } from './routes/offer.$token'
 import { Route as ScheduleTokenRouteImport } from './routes/schedule.$token'
 import { Route as AuthenticatedCandidatesIndexRouteImport } from './routes/_authenticated/candidates.index'
 import { Route as AuthenticatedCandidatesCandidateIdRouteImport } from './routes/_authenticated/candidates.$candidateId'
@@ -29,6 +30,7 @@ import { Route as ApiCronRemindersRouteImport } from './routes/api/cron.reminder
 import { Route as ApiPublicApplicationsRouteImport } from './routes/api/public/applications'
 import { Route as ApiPublicConfirmInterviewRouteImport } from './routes/api/public/confirm-interview'
 import { Route as ScheduleInterviewTokenRouteImport } from './routes/schedule.interview.$token'
+import { Route as ApiPublicOfferTokenRouteImport } from './routes/api/public/offer.$token'
 import { Route as ApiPublicSchedulingAvailabilityRouteImport } from './routes/api/public/scheduling.availability'
 import { Route as ApiPublicSchedulingBookRouteImport } from './routes/api/public/scheduling.book'
 import { Route as ApiPublicSchedulingCancelRouteImport } from './routes/api/public/scheduling.cancel'
@@ -90,6 +92,11 @@ const ConfirmTokenRoute = ConfirmTokenRouteImport.update({
   path: '/confirm/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OfferTokenRoute = OfferTokenRouteImport.update({
+  id: '/offer/$token',
+  path: '/offer/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScheduleTokenRoute = ScheduleTokenRouteImport.update({
   id: '/schedule/$token',
   path: '/schedule/$token',
@@ -140,6 +147,11 @@ const ScheduleInterviewTokenRoute = ScheduleInterviewTokenRouteImport.update({
   path: '/schedule/interview/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicOfferTokenRoute = ApiPublicOfferTokenRouteImport.update({
+  id: '/api/public/offer/$token',
+  path: '/api/public/offer/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSchedulingAvailabilityRoute =
   ApiPublicSchedulingAvailabilityRouteImport.update({
     id: '/api/public/scheduling/availability',
@@ -181,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/scheduling': typeof AuthenticatedSchedulingRoute
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
+  '/offer/$token': typeof OfferTokenRoute
   '/schedule/$token': typeof ScheduleTokenRoute
   '/candidates/$candidateId': typeof AuthenticatedCandidatesCandidateIdRoute
   '/candidates/compare': typeof AuthenticatedCandidatesCompareRoute
@@ -190,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/api/public/confirm-interview': typeof ApiPublicConfirmInterviewRoute
   '/schedule/interview/$token': typeof ScheduleInterviewTokenRoute
   '/candidates/': typeof AuthenticatedCandidatesIndexRoute
+  '/api/public/offer/$token': typeof ApiPublicOfferTokenRoute
   '/api/public/scheduling/availability': typeof ApiPublicSchedulingAvailabilityRoute
   '/api/public/scheduling/book': typeof ApiPublicSchedulingBookRoute
   '/api/public/scheduling/cancel': typeof ApiPublicSchedulingCancelRoute
@@ -207,6 +221,7 @@ export interface FileRoutesByTo {
   '/scheduling': typeof AuthenticatedSchedulingRoute
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
+  '/offer/$token': typeof OfferTokenRoute
   '/schedule/$token': typeof ScheduleTokenRoute
   '/candidates/$candidateId': typeof AuthenticatedCandidatesCandidateIdRoute
   '/candidates/compare': typeof AuthenticatedCandidatesCompareRoute
@@ -216,6 +231,7 @@ export interface FileRoutesByTo {
   '/api/public/confirm-interview': typeof ApiPublicConfirmInterviewRoute
   '/schedule/interview/$token': typeof ScheduleInterviewTokenRoute
   '/candidates': typeof AuthenticatedCandidatesIndexRoute
+  '/api/public/offer/$token': typeof ApiPublicOfferTokenRoute
   '/api/public/scheduling/availability': typeof ApiPublicSchedulingAvailabilityRoute
   '/api/public/scheduling/book': typeof ApiPublicSchedulingBookRoute
   '/api/public/scheduling/cancel': typeof ApiPublicSchedulingCancelRoute
@@ -235,6 +251,7 @@ export interface FileRoutesById {
   '/_authenticated/scheduling': typeof AuthenticatedSchedulingRoute
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
+  '/offer/$token': typeof OfferTokenRoute
   '/schedule/$token': typeof ScheduleTokenRoute
   '/_authenticated/candidates/$candidateId': typeof AuthenticatedCandidatesCandidateIdRoute
   '/_authenticated/candidates/compare': typeof AuthenticatedCandidatesCompareRoute
@@ -244,6 +261,7 @@ export interface FileRoutesById {
   '/api/public/confirm-interview': typeof ApiPublicConfirmInterviewRoute
   '/schedule/interview/$token': typeof ScheduleInterviewTokenRoute
   '/_authenticated/candidates/': typeof AuthenticatedCandidatesIndexRoute
+  '/api/public/offer/$token': typeof ApiPublicOfferTokenRoute
   '/api/public/scheduling/availability': typeof ApiPublicSchedulingAvailabilityRoute
   '/api/public/scheduling/book': typeof ApiPublicSchedulingBookRoute
   '/api/public/scheduling/cancel': typeof ApiPublicSchedulingCancelRoute
@@ -263,6 +281,7 @@ export interface FileRouteTypes {
     | '/scheduling'
     | '/apply/$jobCode'
     | '/confirm/$token'
+    | '/offer/$token'
     | '/schedule/$token'
     | '/candidates/$candidateId'
     | '/candidates/compare'
@@ -272,6 +291,7 @@ export interface FileRouteTypes {
     | '/api/public/confirm-interview'
     | '/schedule/interview/$token'
     | '/candidates/'
+    | '/api/public/offer/$token'
     | '/api/public/scheduling/availability'
     | '/api/public/scheduling/book'
     | '/api/public/scheduling/cancel'
@@ -289,6 +309,7 @@ export interface FileRouteTypes {
     | '/scheduling'
     | '/apply/$jobCode'
     | '/confirm/$token'
+    | '/offer/$token'
     | '/schedule/$token'
     | '/candidates/$candidateId'
     | '/candidates/compare'
@@ -298,6 +319,7 @@ export interface FileRouteTypes {
     | '/api/public/confirm-interview'
     | '/schedule/interview/$token'
     | '/candidates'
+    | '/api/public/offer/$token'
     | '/api/public/scheduling/availability'
     | '/api/public/scheduling/book'
     | '/api/public/scheduling/cancel'
@@ -316,6 +338,7 @@ export interface FileRouteTypes {
     | '/_authenticated/scheduling'
     | '/apply/$jobCode'
     | '/confirm/$token'
+    | '/offer/$token'
     | '/schedule/$token'
     | '/_authenticated/candidates/$candidateId'
     | '/_authenticated/candidates/compare'
@@ -325,6 +348,7 @@ export interface FileRouteTypes {
     | '/api/public/confirm-interview'
     | '/schedule/interview/$token'
     | '/_authenticated/candidates/'
+    | '/api/public/offer/$token'
     | '/api/public/scheduling/availability'
     | '/api/public/scheduling/book'
     | '/api/public/scheduling/cancel'
@@ -338,12 +362,14 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ApplyJobCodeRoute: typeof ApplyJobCodeRoute
   ConfirmTokenRoute: typeof ConfirmTokenRoute
+  OfferTokenRoute: typeof OfferTokenRoute
   ScheduleTokenRoute: typeof ScheduleTokenRoute
   ApiApplicationsApplicationIdRoute: typeof ApiApplicationsApplicationIdRoute
   ApiCronRemindersRoute: typeof ApiCronRemindersRoute
   ApiPublicApplicationsRoute: typeof ApiPublicApplicationsRoute
   ApiPublicConfirmInterviewRoute: typeof ApiPublicConfirmInterviewRoute
   ScheduleInterviewTokenRoute: typeof ScheduleInterviewTokenRoute
+  ApiPublicOfferTokenRoute: typeof ApiPublicOfferTokenRoute
   ApiPublicSchedulingAvailabilityRoute: typeof ApiPublicSchedulingAvailabilityRoute
   ApiPublicSchedulingBookRoute: typeof ApiPublicSchedulingBookRoute
   ApiPublicSchedulingCancelRoute: typeof ApiPublicSchedulingCancelRoute
@@ -430,6 +456,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfirmTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/offer/$token': {
+      id: '/offer/$token'
+      path: '/offer/$token'
+      fullPath: '/offer/$token'
+      preLoaderRoute: typeof OfferTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/schedule/$token': {
       id: '/schedule/$token'
       path: '/schedule/$token'
@@ -491,6 +524,13 @@ declare module '@tanstack/react-router' {
       path: '/schedule/interview/$token'
       fullPath: '/schedule/interview/$token'
       preLoaderRoute: typeof ScheduleInterviewTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/offer/$token': {
+      id: '/api/public/offer/$token'
+      path: '/api/public/offer/$token'
+      fullPath: '/api/public/offer/$token'
+      preLoaderRoute: typeof ApiPublicOfferTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/scheduling/availability': {
@@ -565,12 +605,14 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ApplyJobCodeRoute: ApplyJobCodeRoute,
   ConfirmTokenRoute: ConfirmTokenRoute,
+  OfferTokenRoute: OfferTokenRoute,
   ScheduleTokenRoute: ScheduleTokenRoute,
   ApiApplicationsApplicationIdRoute: ApiApplicationsApplicationIdRoute,
   ApiCronRemindersRoute: ApiCronRemindersRoute,
   ApiPublicApplicationsRoute: ApiPublicApplicationsRoute,
   ApiPublicConfirmInterviewRoute: ApiPublicConfirmInterviewRoute,
   ScheduleInterviewTokenRoute: ScheduleInterviewTokenRoute,
+  ApiPublicOfferTokenRoute: ApiPublicOfferTokenRoute,
   ApiPublicSchedulingAvailabilityRoute: ApiPublicSchedulingAvailabilityRoute,
   ApiPublicSchedulingBookRoute: ApiPublicSchedulingBookRoute,
   ApiPublicSchedulingCancelRoute: ApiPublicSchedulingCancelRoute,

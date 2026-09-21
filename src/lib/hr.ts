@@ -17,8 +17,8 @@ export const STAGE_LABELS: Record<Stage, string> = {
   shortlisted: "Shortlisted",
   doc_verification: "Doc Verification",
   interview: "Interview",
-  offer: "Email sent",
-  hired: "Accepted",
+  offer: "Offer",
+  hired: "Hired",
   rejected: "Rejected",
 };
 

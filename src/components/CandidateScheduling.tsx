@@ -83,7 +83,10 @@ export function CandidateScheduling({
       void navigator.clipboard?.writeText(url).catch(() => undefined);
       toast.success("Scheduling link ready", { description: "Copied to your clipboard." });
     },
-    onError: () => toast.error("Could not create the scheduling link"),
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Could not create the scheduling link";
+      toast.error(msg);
+    },
   });
 
   const cancelMutation = useMutation({
