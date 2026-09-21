@@ -11,6 +11,7 @@ import { AppShell } from "@/components/AppShell";
 import { CandidateTimeline } from "@/components/CandidateTimeline";
 import { CandidateScheduling } from "@/components/CandidateScheduling";
 import { CandidateOffer } from "@/components/CandidateOffer";
+import { CandidateOnboarding } from "@/components/CandidateOnboarding";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -384,6 +385,13 @@ function CandidateDetail() {
             candidateId={person.id}
             candidateName={person.full_name}
             jobTitle={person.applied_role}
+            jobId={person.job_id}
+          />
+
+          <CandidateOnboarding
+            candidateId={person.id}
+            candidateName={person.full_name}
+            isHired={person.application_status === "hired"}
             jobId={person.job_id}
           />
         </div>

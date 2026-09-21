@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it, vi } from "vitest";
 import { SHORTLIST_THRESHOLD } from "@/lib/ats/weights";
 import {

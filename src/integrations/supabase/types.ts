@@ -919,12 +919,174 @@ export type Database = {
           },
         ];
       };
+      onboarding: {
+        Row: {
+          candidate_id: string;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          job_id: string | null;
+          start_date: string | null;
+          status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+          updated_at: string;
+        };
+        Insert: {
+          candidate_id: string;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          job_id?: string | null;
+          start_date?: string | null;
+          status?: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+          updated_at?: string;
+        };
+        Update: {
+          candidate_id?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          job_id?: string | null;
+          start_date?: string | null;
+          status?: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_candidate_id_fkey";
+            columns: ["candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "onboarding_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "jobs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      onboarding_tasks: {
+        Row: {
+          completed_at: string | null;
+          created_at: string;
+          description: string | null;
+          due_date: string | null;
+          id: string;
+          onboarding_id: string;
+          status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string;
+          description?: string | null;
+          due_date?: string | null;
+          id?: string;
+          onboarding_id: string;
+          status?: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string;
+          description?: string | null;
+          due_date?: string | null;
+          id?: string;
+          onboarding_id?: string;
+          status?: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_tasks_onboarding_id_fkey";
+            columns: ["onboarding_id"];
+            isOneToOne: false;
+            referencedRelation: "onboarding";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      onboarding_events: {
+        Row: {
+          candidate_id: string;
+          created_at: string;
+          created_by: string | null;
+          event_type:
+            | "ONBOARDING_CREATED"
+            | "ONBOARDING_STARTED"
+            | "ONBOARDING_TASK_COMPLETED"
+            | "ONBOARDING_COMPLETED"
+            | "ONBOARDING_CANCELLED";
+          id: string;
+          notes: string | null;
+          onboarding_id: string;
+        };
+        Insert: {
+          candidate_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          event_type:
+            | "ONBOARDING_CREATED"
+            | "ONBOARDING_STARTED"
+            | "ONBOARDING_TASK_COMPLETED"
+            | "ONBOARDING_COMPLETED"
+            | "ONBOARDING_CANCELLED";
+          id?: string;
+          notes?: string | null;
+          onboarding_id: string;
+        };
+        Update: {
+          candidate_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          event_type?:
+            | "ONBOARDING_CREATED"
+            | "ONBOARDING_STARTED"
+            | "ONBOARDING_TASK_COMPLETED"
+            | "ONBOARDING_COMPLETED"
+            | "ONBOARDING_CANCELLED";
+          id?: string;
+          notes?: string | null;
+          onboarding_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_events_candidate_id_fkey";
+            columns: ["candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "onboarding_events_onboarding_id_fkey";
+            columns: ["onboarding_id"];
+            isOneToOne: false;
+            referencedRelation: "onboarding";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      create_onboarding_atomic: {
+        Args: {
+          p_candidate_id: string;
+          p_start_date?: string | null;
+          p_created_by?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       app_role: "admin" | "recruiter";
