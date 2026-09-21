@@ -13,6 +13,17 @@ import { loadEnv } from "vite";
 Object.assign(process.env, loadEnv(process.env["NODE_ENV"] ?? "development", process.cwd(), ""));
 
 export default defineConfig({
+  nitro: {
+    preset: "node-server",
+    rollupConfig: {
+      output: {
+        banner: (chunk: { isEntry?: boolean }) =>
+          chunk.isEntry
+            ? 'if (typeof globalThis.process !== "undefined" && globalThis.process?.env) { globalThis.process.env.HOST = globalThis.process.env.HOST || "0.0.0.0"; }'
+            : "",
+      },
+    },
+  } as any,
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
