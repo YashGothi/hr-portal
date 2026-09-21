@@ -68,9 +68,9 @@ export const Route = createFileRoute("/_authenticated/email-dispatch")({
   component: EmailDispatchPage,
 });
 
-type TemplateId = "shortlist" | "interview" | "hired" | "rejected";
+export type TemplateId = "shortlist" | "interview" | "hired" | "rejected";
 
-type EmailTemplate = {
+export type EmailTemplate = {
   id: TemplateId;
   label: string;
   shortLabel: string;
@@ -79,7 +79,7 @@ type EmailTemplate = {
   needsSchedule: boolean;
 };
 
-type Draft = { subject: string; body: string };
+export type Draft = { subject: string; body: string };
 
 type HistoryItem = {
   id: string;
@@ -89,7 +89,7 @@ type HistoryItem = {
   kind: "Individual" | "Bulk";
 };
 
-const TEMPLATES: EmailTemplate[] = [
+export const TEMPLATES: EmailTemplate[] = [
   {
     id: "shortlist",
     label: "Shortlist & screening invite",
@@ -125,7 +125,7 @@ const TEMPLATES: EmailTemplate[] = [
   },
 ];
 
-const TEMPLATE_BY_ID = Object.fromEntries(
+export const TEMPLATE_BY_ID = Object.fromEntries(
   TEMPLATES.map((template) => [template.id, template]),
 ) as Record<TemplateId, EmailTemplate>;
 
@@ -133,7 +133,7 @@ const TEMPLATE_BY_ID = Object.fromEntries(
 // Drafts saved by older versions baked real names in and are discarded.
 const STORAGE_KEY = "hr-automate-email-template-drafts-v2";
 
-function candidateRole(candidate: Candidate | undefined) {
+export function candidateRole(candidate: Candidate | undefined) {
   return candidate?.applied_role?.trim() || "the position";
 }
 
@@ -141,7 +141,7 @@ function candidateRole(candidate: Candidate | undefined) {
  * Placeholders keep saved templates candidate-neutral, so the editor can
  * re-personalize the same wording whenever a different recipient is selected.
  */
-const TOKEN = {
+export const TOKEN = {
   name: "{{candidate_name}}",
   role: "{{role}}",
   schedule: "{{schedule}}",
@@ -149,7 +149,7 @@ const TOKEN = {
   confirm: "{{confirm_link}}",
 } as const;
 
-type Personalization = {
+export type Personalization = {
   name: string;
   role: string;
   schedule: string;
@@ -159,7 +159,7 @@ type Personalization = {
 
 const SIGN_OFF = "Kind regards,\nTalent Acquisition Team\naiHIVE";
 
-const DEFAULT_TEMPLATES: Record<TemplateId, Draft> = {
+export const DEFAULT_TEMPLATES: Record<TemplateId, Draft> = {
   shortlist: {
     subject: `Congratulations, ${TOKEN.name} — shortlisted for ${TOKEN.role}`,
     body: `Dear ${TOKEN.name},\n\nThank you for your interest in the ${TOKEN.role} opportunity. We are pleased to let you know that your application has been shortlisted.\n\nWe would like to invite you to an initial screening conversation on ${TOKEN.schedule}.${TOKEN.meeting}\n\nPlease confirm your availability using the secure link below:\n${TOKEN.confirm}\n\nIf the proposed time is not convenient, simply reply to this email and we will gladly arrange an alternative.\n\n${SIGN_OFF}`,
@@ -178,7 +178,7 @@ const DEFAULT_TEMPLATES: Record<TemplateId, Draft> = {
   },
 };
 
-function personalization(
+export function personalization(
   candidate: Candidate | undefined,
   date: Date,
   time: string,
@@ -198,7 +198,7 @@ function personalization(
 }
 
 /** Swaps placeholders for the selected candidate's details. */
-function fill(text: string, values: Personalization) {
+export function fill(text: string, values: Personalization) {
   return text
     .replaceAll(TOKEN.name, values.name)
     .replaceAll(TOKEN.role, values.role)
@@ -208,7 +208,7 @@ function fill(text: string, values: Personalization) {
 }
 
 /** Puts placeholders back before a template is saved for reuse. */
-function tokenize(text: string, values: Personalization) {
+export function tokenize(text: string, values: Personalization) {
   let out = text;
   const pairs: [string, string][] = [
     [values.confirm, TOKEN.confirm],
@@ -223,50 +223,69 @@ function tokenize(text: string, values: Personalization) {
   return out;
 }
 
-function EmailDispatchPage() {
-  const { data: candidates = [], isLoading } = useCandidates();
-  const [templateId, setTemplateId] = useState<TemplateId>("shortlist");
-  const [candidateId, setCandidateId] = useState("");
-  const [date, setDate] = useState(() => {
+export type EmailDispatchStateProps = {
+  candidates?: Candidate[] | undefined;
+  initialCandidateId?: string | undefined;
+  initialTemplateId?: TemplateId | undefined;
+  initialDate?: Date | undefined;
+  initialTime?: string | undefined;
+  initialMeetingLink?: string | undefined;
+  origin?: string | undefined;
+};
+
+export function useEmailDispatchState({
+  candidates = [],
+  initialCandidateId = "",
+  initialTemplateId = "shortlist",
+  initialDate,
+  initialTime = "10:00",
+  initialMeetingLink = "",
+  origin = "",
+}: EmailDispatchStateProps = {}) {
+  const [templateId, setTemplateId] = useState<TemplateId>(initialTemplateId);
+  const [candidateId, setCandidateId] = useState<string>(initialCandidateId);
+  const [date, setDate] = useState<Date>(() => {
+    if (initialDate) return initialDate;
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
     return nextWeek;
   });
-  const [time, setTime] = useState("10:00");
-  const [meetingLink, setMeetingLink] = useState("");
+  const [time, setTime] = useState(initialTime);
+  const [meetingLink, setMeetingLink] = useState(initialMeetingLink);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [savedDrafts, setSavedDrafts] = useState<Partial<Record<TemplateId, Draft>>>({});
   // null = follow the template + selected candidate; a string = HR's manual edit.
   const [editedSubject, setEditedSubject] = useState<string | null>(null);
   const [editedBody, setEditedBody] = useState<string | null>(null);
 
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [sending, setSending] = useState(false);
-  const runSend = useServerFn(sendDispatchEmail);
-  const { live: dnsLive } = useSenderDns();
-
   const selectedTemplate = TEMPLATE_BY_ID[templateId];
-  const selectedCandidate = candidates.find((candidate) => candidate.id === candidateId);
-  const suggestedCandidate =
-    selectedCandidate ??
-    candidates.find((candidate) => selectedTemplate.eligibleStages.includes(candidate.stage)) ??
-    candidates[0];
+  const selectedCandidate = useMemo(
+    () => candidates.find((candidate) => candidate.id === candidateId) ?? null,
+    [candidates, candidateId],
+  );
 
   useEffect(() => {
-    if (!candidateId && suggestedCandidate) setCandidateId(suggestedCandidate.id);
-  }, [candidateId, suggestedCandidate]);
+    if (candidates.length > 0) {
+      if (!candidateId || !candidates.some((c) => c.id === candidateId)) {
+        const first = candidates[0];
+        if (first) setCandidateId(first.id);
+      }
+    }
+  }, [candidateId, candidates]);
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Partial<Record<TemplateId, Draft>>;
-        // Only keep drafts that still use placeholders — anything with a baked-in
-        // name would stop personalizing when the target candidate changes.
-        const valid = Object.fromEntries(
-          Object.entries(parsed).filter(([, draft]) => draft?.body.includes(TOKEN.name)),
-        ) as Partial<Record<TemplateId, Draft>>;
-        setSavedDrafts(valid);
+      if (typeof window !== "undefined" && window.localStorage) {
+        const stored = window.localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored) as Partial<Record<TemplateId, Draft>>;
+          // Only keep drafts that still use placeholders — anything with a baked-in
+          // name would stop personalizing when the target candidate changes.
+          const valid = Object.fromEntries(
+            Object.entries(parsed).filter(([, draft]) => draft?.body.includes(TOKEN.name)),
+          ) as Partial<Record<TemplateId, Draft>>;
+          setSavedDrafts(valid);
+        }
       }
     } catch {
       // A blocked browser store should not prevent the editor from working.
@@ -274,15 +293,8 @@ function EmailDispatchPage() {
   }, []);
 
   const values = useMemo(
-    () =>
-      personalization(
-        suggestedCandidate,
-        date,
-        time,
-        meetingLink,
-        typeof window === "undefined" ? "" : window.location.origin,
-      ),
-    [suggestedCandidate, date, time, meetingLink],
+    () => personalization(selectedCandidate ?? undefined, date, time, meetingLink, origin),
+    [selectedCandidate, date, time, meetingLink, origin],
   );
 
   // The visible email is always derived from the template plus the currently
@@ -304,17 +316,13 @@ function EmailDispatchPage() {
   );
 
   function selectTemplate(nextId: TemplateId) {
-    const template = TEMPLATE_BY_ID[nextId];
     setTemplateId(nextId);
     setEditedSubject(null);
     setEditedBody(null);
-    if (!template.eligibleStages.includes(suggestedCandidate?.stage ?? "application")) {
-      setCandidateId(
-        candidates.find((candidate) => template.eligibleStages.includes(candidate.stage))?.id ??
-          candidates[0]?.id ??
-          "",
-      );
-    }
+  }
+
+  function selectCandidate(nextId: string) {
+    setCandidateId(nextId);
   }
 
   function saveTemplate() {
@@ -326,7 +334,9 @@ function EmailDispatchPage() {
     setEditedSubject(null);
     setEditedBody(null);
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      }
       toast.success("Template saved in this browser.");
     } catch {
       toast.error("This browser could not save the template.");
@@ -340,19 +350,127 @@ function EmailDispatchPage() {
     setEditedSubject(null);
     setEditedBody(null);
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      }
     } catch {
       // The in-memory reset still succeeds.
     }
     toast.success("Template restored to the professional default.");
   }
 
+  function getIndividualDispatchPayload() {
+    if (!selectedCandidate) return null;
+    const personValues = personalization(selectedCandidate, date, time, meetingLink, origin);
+    return {
+      candidateId: selectedCandidate.id,
+      recipientEmail: selectedCandidate.email,
+      candidateName: selectedCandidate.full_name,
+      templateId,
+      subject: fill(subjectSource, personValues),
+      message: fill(bodySource, personValues),
+      schedule: selectedTemplate.needsSchedule ? personValues.schedule : undefined,
+      meetingDetails: meetingLink.trim() || undefined,
+      confirmLink: selectedCandidate.interview_confirm_token
+        ? `${origin}/confirm/${selectedCandidate.interview_confirm_token}`
+        : undefined,
+    };
+  }
+
+  return {
+    templateId,
+    setTemplateId,
+    selectedTemplate,
+    selectTemplate,
+    candidateId,
+    setCandidateId,
+    selectedCandidate,
+    selectCandidate,
+    date,
+    setDate,
+    time,
+    setTime,
+    meetingLink,
+    setMeetingLink,
+    mode,
+    setMode,
+    subject,
+    body,
+    changeSubject,
+    changeBody,
+    subjectSource,
+    bodySource,
+    values,
+    eligibleCandidates,
+    saveTemplate,
+    resetTemplate,
+    getIndividualDispatchPayload,
+    savedDrafts,
+    setSavedDrafts,
+  };
+}
+
+export type { Candidate } from "@/lib/queries";
+
+export type EmailDispatchPageProps = {
+  initialCandidates?: Candidate[] | undefined;
+  initialCandidateId?: string | undefined;
+  initialTemplateId?: TemplateId | undefined;
+};
+
+export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
+  const { initialCandidates, initialCandidateId, initialTemplateId } = props;
+  const candidatesQuery = useCandidates();
+  const candidates = initialCandidates ?? candidatesQuery.data ?? [];
+  const isLoading = initialCandidates ? false : candidatesQuery.isLoading;
+
+  const {
+    templateId,
+    selectedTemplate,
+    selectTemplate,
+    candidateId,
+    setCandidateId,
+    selectedCandidate,
+    date,
+    setDate,
+    time,
+    setTime,
+    meetingLink,
+    setMeetingLink,
+    mode,
+    setMode,
+    subject,
+    body,
+    changeSubject,
+    changeBody,
+    subjectSource,
+    bodySource,
+    values,
+    eligibleCandidates,
+    saveTemplate,
+    resetTemplate,
+  } = useEmailDispatchState({
+    candidates,
+    initialCandidateId,
+    initialTemplateId,
+    origin: typeof window === "undefined" ? "" : window.location.origin,
+  });
+
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [sending, setSending] = useState(false);
+  const runSend = useServerFn(sendDispatchEmail);
+  const { live: dnsLive } = useSenderDns();
+
   async function dispatch(kind: HistoryItem["kind"]) {
     const people =
-      kind === "Bulk" ? eligibleCandidates : suggestedCandidate ? [suggestedCandidate] : [];
+      kind === "Bulk" ? eligibleCandidates : selectedCandidate ? [selectedCandidate] : [];
     const firstPerson = people[0];
     if (!firstPerson) {
-      toast.error("There are no matching candidates for this template.");
+      toast.error(
+        kind === "Bulk"
+          ? "There are no matching candidates for this template."
+          : "Please select a candidate to send this email to.",
+      );
       return;
     }
     if (!dnsLive) {
@@ -425,7 +543,7 @@ function EmailDispatchPage() {
     }
   }
 
-  const initials = suggestedCandidate?.full_name
+  const initials = selectedCandidate?.full_name
     .split(/\s+/)
     .map((part) => part[0])
     .slice(0, 2)
@@ -457,7 +575,7 @@ function EmailDispatchPage() {
             </h2>
             <div className="mt-4 space-y-2">
               <Label>Candidate</Label>
-              <Select value={suggestedCandidate?.id ?? ""} onValueChange={setCandidateId}>
+              <Select value={selectedCandidate?.id ?? ""} onValueChange={setCandidateId}>
                 <SelectTrigger className="w-full">
                   <SelectValue
                     placeholder={isLoading ? "Loading candidates…" : "Select a candidate"}
@@ -474,28 +592,28 @@ function EmailDispatchPage() {
               </Select>
             </div>
 
-            {suggestedCandidate ? (
+            {selectedCandidate ? (
               <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
                   {initials || "?"}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{suggestedCandidate.full_name}</p>
+                  <p className="truncate text-sm font-medium">{selectedCandidate.full_name}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {suggestedCandidate.email}
+                    {selectedCandidate.email}
                   </p>
                 </div>
                 <Badge variant="outline" className="ml-auto shrink-0">
-                  {STAGE_LABELS[suggestedCandidate.stage]}
+                  {STAGE_LABELS[selectedCandidate.stage]}
                 </Badge>
               </div>
             ) : null}
 
-            {suggestedCandidate?.interview_confirmed_at ? (
+            {selectedCandidate?.interview_confirmed_at ? (
               <p className="mt-3 flex items-center gap-2 text-xs text-primary">
                 <Check className="size-3.5" />
                 Attendance confirmed on{" "}
-                {format(new Date(suggestedCandidate.interview_confirmed_at), "d MMM yyyy, h:mm a")}
+                {format(new Date(selectedCandidate.interview_confirmed_at), "d MMM yyyy, h:mm a")}
               </p>
             ) : null}
           </section>
@@ -670,9 +788,9 @@ function EmailDispatchPage() {
                 <span>
                   Recipient:{" "}
                   <strong className="font-medium text-foreground">
-                    {suggestedCandidate?.full_name ?? "No candidate selected"}
+                    {selectedCandidate?.full_name ?? "No candidate selected"}
                   </strong>
-                  {suggestedCandidate?.email ? ` (${suggestedCandidate.email})` : ""}
+                  {selectedCandidate?.email ? ` (${selectedCandidate.email})` : ""}
                 </span>
                 <span className="flex items-center gap-1 text-primary">
                   {mode === "edit" ? <Pencil className="size-3" /> : <Eye className="size-3" />}
@@ -721,11 +839,11 @@ function EmailDispatchPage() {
                   Personalized for {values.name}. The confirm-attendance link in this email is live
                   — opening it records the candidate&apos;s confirmation and shows it on the
                   calendar.
-                  {suggestedCandidate?.interview_confirm_token ? (
+                  {selectedCandidate?.interview_confirm_token ? (
                     <>
                       {" "}
                       <a
-                        href={`/confirm/${suggestedCandidate.interview_confirm_token}`}
+                        href={`/confirm/${selectedCandidate.interview_confirm_token}`}
                         target="_blank"
                         rel="noreferrer"
                         className="font-medium text-primary underline-offset-2 hover:underline"
@@ -739,17 +857,13 @@ function EmailDispatchPage() {
                   <AlertDialogTrigger asChild>
                     <Button
                       disabled={
-                        !suggestedCandidate ||
-                        !subject.trim() ||
-                        !body.trim() ||
-                        sending ||
-                        !dnsLive
+                        !selectedCandidate || !subject.trim() || !body.trim() || sending || !dnsLive
                       }
                     >
                       <Send className="size-4" />
                       {sending
                         ? "Sending…"
-                        : `Send to ${suggestedCandidate?.full_name?.split(" ")[0] ?? "candidate"}`}
+                        : `Send to ${selectedCandidate?.full_name?.split(" ")[0] ?? "candidate"}`}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -757,7 +871,7 @@ function EmailDispatchPage() {
                       <AlertDialogTitle>Send this email?</AlertDialogTitle>
                       <AlertDialogDescription>
                         The message above will be delivered to{" "}
-                        {suggestedCandidate?.email ?? "the candidate"} from your Seceon sender
+                        {selectedCandidate?.email ?? "the candidate"} from your Seceon sender
                         address.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
