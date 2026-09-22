@@ -252,11 +252,27 @@ export function useStageHistory(candidateId: string) {
 export function useMoveStage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ candidate, toStage }: { candidate: Candidate; toStage: Stage }) => {
+    mutationFn: async ({
+      candidate,
+      toStage,
+      expectedCurrentStage,
+    }: {
+      candidate: Candidate;
+      toStage: Stage;
+      expectedCurrentStage?: Stage;
+    }) => {
       const patch = { stage: toStage };
 
-      const { error } = await supabase.from("candidates").update(patch).eq("id", candidate.id);
+      let query = supabase.from("candidates").update(patch).eq("id", candidate.id);
+      if (expectedCurrentStage) {
+        query = query.eq("stage", expectedCurrentStage);
+      }
+
+      const { data, error } = await query.select();
       if (error) throw new Error(error.message);
+      if (expectedCurrentStage && (!data || data.length === 0)) {
+        throw new Error("Cannot undo: Candidate stage has changed since this action.");
+      }
 
       const { data: session } = await supabase.auth.getUser();
       await supabase.from("stage_history").insert({
@@ -392,17 +408,58 @@ export function useSetOutcome() {
 export function useRescheduleInterview() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ candidate, day }: { candidate: Candidate; day: Date }) => {
-      const current = candidate.interview_at ? new Date(candidate.interview_at) : new Date();
-      const next = new Date(day);
-      next.setHours(current.getHours(), current.getMinutes(), 0, 0);
+    mutationFn: async ({
+      candidate,
+      day,
+      targetDate,
+      expectedInterviewAt,
+    }: {
+      candidate: Candidate;
+      day?: Date;
+      targetDate?: Date | string | null;
+      expectedInterviewAt?: string | null;
+    }) => {
+      let nextIso: string | null = null;
+      let nextDateObj: Date | null = null;
 
-      const { error } = await supabase
+      if (targetDate !== undefined) {
+        if (targetDate === null) {
+          nextIso = null;
+        } else if (typeof targetDate === "string") {
+          nextIso = targetDate;
+          nextDateObj = new Date(targetDate);
+        } else {
+          nextIso = targetDate.toISOString();
+          nextDateObj = targetDate;
+        }
+      } else if (day) {
+        const current = candidate.interview_at ? new Date(candidate.interview_at) : new Date();
+        const next = new Date(day);
+        next.setHours(current.getHours(), current.getMinutes(), 0, 0);
+        nextIso = next.toISOString();
+        nextDateObj = next;
+      }
+
+      let query = supabase
         .from("candidates")
-        .update({ interview_at: next.toISOString() })
+        .update({ interview_at: nextIso })
         .eq("id", candidate.id);
+
+      if (expectedInterviewAt !== undefined) {
+        if (expectedInterviewAt === null) {
+          query = query.is("interview_at", null);
+        } else {
+          query = query.eq("interview_at", expectedInterviewAt);
+        }
+      }
+
+      const { data, error } = await query.select();
       if (error) throw new Error(error.message);
-      return next;
+      if (expectedInterviewAt !== undefined && (!data || data.length === 0)) {
+        throw new Error("Cannot undo: Interview schedule has changed since this action.");
+      }
+
+      return nextDateObj ?? (nextIso ? new Date(nextIso) : new Date());
     },
     onSuccess: (_r, variables) => {
       queryClient.invalidateQueries({ queryKey: ["candidates"] });

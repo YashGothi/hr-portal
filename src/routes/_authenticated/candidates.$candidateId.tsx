@@ -12,6 +12,7 @@ import { CandidateTimeline } from "@/components/CandidateTimeline";
 import { CandidateScheduling } from "@/components/CandidateScheduling";
 import { CandidateOffer } from "@/components/CandidateOffer";
 import { CandidateOnboarding } from "@/components/CandidateOnboarding";
+import { showUndoToast } from "@/components/UndoToast";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -248,15 +249,38 @@ function CandidateDetail() {
           </Select>
           <Select
             value={person.stage}
-            onValueChange={(value) =>
+            onValueChange={(value) => {
+              const fromStage = person.stage;
+              const toStage = value as Stage;
+              if (fromStage === toStage) return;
               moveStage.mutate(
-                { candidate: person, toStage: value as Stage },
+                { candidate: person, toStage },
                 {
-                  onSuccess: () => toast.success(`Moved to ${STAGE_LABELS[value as Stage]}`),
+                  onSuccess: () => {
+                    showUndoToast({
+                      message: `${person.full_name} moved to ${STAGE_LABELS[toStage]}`,
+                      onUndo: async () => {
+                        try {
+                          await moveStage.mutateAsync({
+                            candidate: person,
+                            toStage: fromStage,
+                            expectedCurrentStage: toStage,
+                          });
+                          toast.success(
+                            `${person.full_name} reverted to ${STAGE_LABELS[fromStage]}`,
+                          );
+                        } catch (err) {
+                          toast.error(
+                            err instanceof Error ? err.message : "Failed to revert candidate stage",
+                          );
+                        }
+                      },
+                    });
+                  },
                   onError: (error) => toast.error(error.message),
                 },
-              )
-            }
+              );
+            }}
           >
             <SelectTrigger className="w-44">
               <SelectValue />
@@ -371,7 +395,7 @@ function CandidateDetail() {
           <CandidateTimeline candidate={person} history={history.data ?? []} />
         </section>
 
-        <div className="lg:col-span-1 space-y-5">
+        <div className="lg:col-span-2 space-y-5">
           <CandidateScheduling
             candidateId={person.id}
             candidateName={person.full_name}
@@ -384,6 +408,7 @@ function CandidateDetail() {
           <CandidateOffer
             candidateId={person.id}
             candidateName={person.full_name}
+            candidateEmail={person.email}
             jobTitle={person.applied_role}
             jobId={person.job_id}
           />

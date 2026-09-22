@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { SELECTABLE_STAGES, STAGE_BADGE, STAGE_LABELS, type Stage } from "@/lib/hr";
 import { useCandidates, useMoveStage, useRescheduleInterview, type Candidate } from "@/lib/queries";
+import { showUndoToast } from "@/components/UndoToast";
 
 export const Route = createFileRoute("/_authenticated/calendar")({
   head: () => ({
@@ -104,10 +105,29 @@ function CalendarPage() {
 
   function moveToStage(candidate: Candidate, toStage: Stage) {
     if (toStage === candidate.stage) return;
+    const fromStage = candidate.stage;
     moveStage.mutate(
       { candidate, toStage },
       {
-        onSuccess: () => toast.success(`${candidate.full_name} moved to ${STAGE_LABELS[toStage]}`),
+        onSuccess: () => {
+          showUndoToast({
+            message: `${candidate.full_name} moved to ${STAGE_LABELS[toStage]}`,
+            onUndo: async () => {
+              try {
+                await moveStage.mutateAsync({
+                  candidate,
+                  toStage: fromStage,
+                  expectedCurrentStage: toStage,
+                });
+                toast.success(`${candidate.full_name} reverted to ${STAGE_LABELS[fromStage]}`);
+              } catch (err) {
+                toast.error(
+                  err instanceof Error ? err.message : "Failed to revert candidate stage",
+                );
+              }
+            },
+          });
+        },
         onError: (error) => toast.error(error.message),
       },
     );
@@ -116,16 +136,43 @@ function CalendarPage() {
   function dropOnDay(day: Date, candidateId: string) {
     const candidate = (candidates.data ?? []).find((c) => c.id === candidateId);
     if (!candidate || !candidate.interview_at) return;
+    const prevDate = candidate.interview_at;
     reschedule.mutate(
       { candidate, day },
       {
-        onSuccess: (next) =>
-          toast.success(
-            `${candidate.full_name}'s interview moved to ${next.toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "short",
-            })}`,
-          ),
+        onSuccess: (next) => {
+          const nextIso = next.toISOString();
+          showUndoToast({
+            message: `${candidate.full_name}'s interview rescheduled to ${next.toLocaleDateString(
+              undefined,
+              {
+                day: "numeric",
+                month: "short",
+              },
+            )}`,
+            onUndo: async () => {
+              try {
+                await reschedule.mutateAsync({
+                  candidate,
+                  targetDate: prevDate,
+                  expectedInterviewAt: nextIso,
+                });
+                toast.success(
+                  `${candidate.full_name}'s interview rescheduled back to ${new Date(
+                    prevDate,
+                  ).toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                  })}`,
+                );
+              } catch (err) {
+                toast.error(
+                  err instanceof Error ? err.message : "Failed to revert interview schedule",
+                );
+              }
+            },
+          });
+        },
         onError: (error) => toast.error(error.message),
       },
     );

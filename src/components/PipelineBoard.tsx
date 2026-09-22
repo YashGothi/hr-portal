@@ -27,6 +27,8 @@ const TONE_CLASS = {
   muted: "border-border bg-muted text-muted-foreground",
 } as const;
 
+import { showUndoToast } from "@/components/UndoToast";
+
 /**
  * Kanban board of the hiring pipeline: one column per active stage plus a
  * single "Status" column holding the final Accepted / Rejected outcomes.
@@ -45,10 +47,29 @@ export function PipelineBoard({
 
   function move(candidate: Candidate, toStage: Stage) {
     if (toStage === candidate.stage) return;
+    const fromStage = candidate.stage;
     moveStage.mutate(
       { candidate, toStage },
       {
-        onSuccess: () => toast.success(`${candidate.full_name} moved to ${STAGE_LABELS[toStage]}`),
+        onSuccess: () => {
+          showUndoToast({
+            message: `${candidate.full_name} moved to ${STAGE_LABELS[toStage]}`,
+            onUndo: async () => {
+              try {
+                await moveStage.mutateAsync({
+                  candidate,
+                  toStage: fromStage,
+                  expectedCurrentStage: toStage,
+                });
+                toast.success(`${candidate.full_name} reverted to ${STAGE_LABELS[fromStage]}`);
+              } catch (err) {
+                toast.error(
+                  err instanceof Error ? err.message : "Failed to revert candidate stage",
+                );
+              }
+            },
+          });
+        },
         onError: (error) => toast.error(error.message),
       },
     );
