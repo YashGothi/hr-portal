@@ -38,6 +38,8 @@ describe("PHASE 11: External Integrations Suite", () => {
       delete process.env["LOVABLE_WEBHOOK_SECRET"];
       delete process.env["LOVABLE_API_KEY"];
       delete process.env["RESEND_API_KEY"];
+      delete process.env["VITE_RESEND_API_KEY"];
+      delete process.env["VITE_LOVABLE_API_KEY"];
 
       const { sendTemplateEmail } = await import("@/lib/email-templates/send-email");
       await expect(

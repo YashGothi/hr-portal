@@ -488,15 +488,14 @@ describe("EmailDispatchPage — Render & Static Markup Safety", () => {
     // Verify body preview displays Elena Rostova
     expect(html).toContain("Dear Elena Rostova,");
 
-    // Verify button says 'Send to Elena'
-    expect(html).toContain("Send to Elena");
+    // Verify view mode button shows 'Copy Email Content'
+    expect(html).toContain("Copy Email Content");
 
     // Verify recipient header shows Elena's email
     expect(html).toContain("(elena.rostova@example.com)");
 
     // Crucial: should NOT have Offline Deterministic Tester in the recipient or preview
     expect(html).not.toContain("Dear Offline Deterministic Tester,");
-    expect(html).not.toContain("Send to Offline");
   });
 
   it("renders Offline Deterministic Tester when explicitly selected", () => {
@@ -509,7 +508,7 @@ describe("EmailDispatchPage — Render & Static Markup Safety", () => {
     expect(html).toContain("Offline Deterministic Tester");
     expect(html).toContain("offline.tester@example.com");
     expect(html).toContain("Dear Offline Deterministic Tester,");
-    expect(html).toContain("Send to Offline");
+    expect(html).toContain("Copy Email Content");
     expect(html).not.toContain("Dear Elena Rostova,");
   });
 });

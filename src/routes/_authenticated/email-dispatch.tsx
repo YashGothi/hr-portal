@@ -1,33 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { format } from "date-fns";
 import {
   CalendarDays,
   Check,
   Clock3,
+  Copy,
   Eye,
   Mail,
   Pencil,
   RotateCcw,
   Save,
-  Send,
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { SenderDnsStatus, useSenderDns } from "@/components/SenderDnsStatus";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { SenderDnsStatus } from "@/components/SenderDnsStatus";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -42,7 +30,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { sendDispatchEmail } from "@/lib/dispatch.functions";
 import { STAGE_LABELS, type Stage } from "@/lib/hr";
 import { useCandidates, type Candidate } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -472,89 +459,7 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
     origin: typeof window === "undefined" ? "" : window.location.origin,
   });
 
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [sending, setSending] = useState(false);
-  const runSend = useServerFn(sendDispatchEmail);
-  const { live: dnsLive } = useSenderDns();
-
-  async function dispatch(kind: HistoryItem["kind"]) {
-    const people =
-      kind === "Bulk" ? eligibleCandidates : selectedCandidate ? [selectedCandidate] : [];
-    const firstPerson = people[0];
-    if (!firstPerson) {
-      toast.error(
-        kind === "Bulk"
-          ? "There are no matching candidates for this template."
-          : "Please select a candidate to send this email to.",
-      );
-      return;
-    }
-    if (!dnsLive) {
-      toast.error("Sending is disabled until your sender domain records are publicly live.");
-      return;
-    }
-    setSending(true);
-    const origin = window.location.origin;
-    let sent = 0;
-    let blocked = 0;
-    for (const person of people) {
-      // Personalize per recipient so bulk sends carry each candidate's own
-      // name, role and confirm-attendance link.
-      const personValues = personalization(person, date, time, meetingLink, origin);
-      try {
-        const result = await runSend({
-          data: {
-            candidateId: person.id,
-            templateId,
-            subject: fill(subjectSource, personValues),
-            message: fill(bodySource, personValues),
-            schedule: selectedTemplate.needsSchedule ? personValues.schedule : undefined,
-            meetingDetails: meetingLink.trim() || undefined,
-            confirmLink: person.interview_confirm_token
-              ? `${origin}/confirm/${person.interview_confirm_token}`
-              : undefined,
-            idempotencyKey: `dispatch-${templateId}-${person.id}-${format(date, "yyyy-MM-dd")}-${time}`,
-          },
-        });
-        if (result.sent) {
-          sent += 1;
-        } else {
-          blocked += 1;
-          toast.warning(
-            result.reason === "recipient_suppressed"
-              ? `${person.full_name}: not sent — ${result.details || "this address previously bounced, opted out, or requires domain verification in Resend."}`
-              : `${person.full_name}: not sent — no email address on file.`,
-          );
-        }
-      } catch (error) {
-        blocked += 1;
-        const message = error instanceof Error ? error.message : String(error);
-        toast.error(`Could not send to ${person.full_name}: ${message.slice(0, 150)}`);
-      }
-    }
-    setSending(false);
-    if (sent > 0) {
-      setHistory((current) => [
-        {
-          id: crypto.randomUUID(),
-          recipients:
-            kind === "Bulk" ? `${sent} of ${people.length} candidates` : firstPerson.full_name,
-          subject: fill(subjectSource, values),
-          sentAt: new Date(),
-          kind,
-        },
-        ...current,
-      ]);
-      toast.success(
-        blocked > 0
-          ? `Sent to ${sent} ${sent === 1 ? "candidate" : "candidates"}; ${blocked} could not be delivered.`
-          : `Email sent to ${sent === 1 ? firstPerson.full_name : `${sent} candidates`}.`,
-      );
-    } else if (blocked > 0) {
-      toast.error("No emails were delivered. See the messages above for details.");
-    }
-  }
-
+  const [history] = useState<HistoryItem[]>([]);
   const initials = selectedCandidate?.full_name
     .split(/\s+/)
     .map((part) => part[0])
@@ -564,16 +469,15 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
 
   return (
     <AppShell
-      title="Email Dispatch & Template Studio"
-      subtitle="Send branded candidate emails from your Seceon domain and manage templates."
+      title="Candidate Email Preview & Template Studio"
+      subtitle="Preview branded candidate email templates, customize wording, and view interview invitations."
     >
       <div className="mb-5 flex items-start gap-3 rounded-lg border border-primary/25 bg-primary/10 px-4 py-3">
         <Mail className="mt-0.5 size-4 shrink-0 text-primary" />
         <div>
-          <p className="text-sm font-medium">Live sending via hr.seceon.com</p>
+          <p className="text-sm font-medium">Candidate Email Preview & Template Studio</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Dispatch actions deliver real emails to candidates once your sender domain finishes DNS
-            verification.
+            Select candidates, personalize template wording, and preview generated email content in view-only mode.
           </p>
         </div>
       </div>
@@ -721,7 +625,7 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
             <div className="flex items-center gap-2 text-primary">
               <Users className="size-4" />
               <h2 id="bulk-heading" className="text-sm font-semibold">
-                Bulk dispatch
+                Matching Candidates Summary
               </h2>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -729,35 +633,9 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
               {eligibleCandidates.length === 1 ? "candidate matches" : "candidates match"} the{" "}
               {selectedTemplate.shortLabel.toLowerCase()} stage criteria.
             </p>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  className="mt-4 w-full"
-                  disabled={eligibleCandidates.length === 0 || sending || dnsLive === false}
-                >
-                  <Send className="size-4" />
-                  {sending
-                    ? "Sending…"
-                    : `Send to ${eligibleCandidates.length} ${eligibleCandidates.length === 1 ? "candidate" : "candidates"}`}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    Send to all {eligibleCandidates.length} matching candidates?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Each candidate receives their own personalized email. This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => void dispatch("Bulk")}>
-                    Send emails
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <div className="mt-3 rounded-md border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
+              Viewing personalized email template preview for {eligibleCandidates.length} matching candidate{eligibleCandidates.length === 1 ? "" : "s"}.
+            </div>
           </section>
         </div>
 
@@ -865,36 +743,19 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
                     </>
                   ) : null}
                 </p>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      disabled={
-                        !selectedCandidate || !subject.trim() || !body.trim() || sending || dnsLive === false
-                      }
-                    >
-                      <Send className="size-4" />
-                      {sending
-                        ? "Sending…"
-                        : `Send to ${selectedCandidate?.full_name?.split(" ")[0] ?? "candidate"}`}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Send this email?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        The message above will be delivered to{" "}
-                        {selectedCandidate?.email ?? "the candidate"} from your Seceon sender
-                        address.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => void dispatch("Individual")}>
-                        Send email
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard
+                      ?.writeText(`Subject: ${subject}\n\n${body}`)
+                      .then(() => toast.success("Email subject & body copied to clipboard!"))
+                      .catch(() => toast.error("Could not copy to clipboard."));
+                  }}
+                >
+                  <Copy className="size-4" />
+                  Copy Email Content
+                </Button>
               </div>
             </div>
           </section>
