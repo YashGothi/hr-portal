@@ -70,10 +70,9 @@ export async function evaluateSenderDns(): Promise<SenderDnsStatus> {
   // 1. If Resend Cloudflare DNS records are published OR API key is configured
   if (hasResendDns || resendApiKey || lovableApiKey) {
     const isApiKeyConfigured = Boolean(resendApiKey || lovableApiKey);
-    const isLive = hasResendDns || isApiKeyConfigured;
 
     return {
-      live: isLive,
+      live: isApiKeyConfigured,
       checkedAt: new Date().toISOString(),
       provider: "Resend (Cloudflare DNS)",
       resolvers: RESOLVERS.map((resolver) => resolver.label),
@@ -82,18 +81,18 @@ export async function evaluateSenderDns(): Promise<SenderDnsStatus> {
           label: "Cloudflare DKIM Record (resend._domainkey)",
           name: `resend._domainkey.${SENDER_SUBDOMAIN}`,
           type: "TXT",
-          ok: hasResendDns || isApiKeyConfigured,
-          found: hasResendDns ? foundDns : ["Published DKIM TXT Record"],
+          ok: hasResendDns,
+          found: hasResendDns ? foundDns : ["No Resend DKIM record found in Cloudflare DNS"],
           expected: ["Published DKIM TXT Record"],
         },
         {
           label: "Resend API Key Environment Variable",
           name: "RESEND_API_KEY",
           type: "API",
-          ok: isApiKeyConfigured || hasResendDns,
+          ok: isApiKeyConfigured,
           found: isApiKeyConfigured
             ? ["Active & Configured"]
-            : ["Cloudflare DNS Active (Set RESEND_API_KEY in Render if needed)"],
+            : ["Missing in Render Environment"],
           expected: ["Set RESEND_API_KEY in Render Dashboard → Environment"],
         },
       ],
