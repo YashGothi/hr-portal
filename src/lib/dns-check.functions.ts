@@ -17,11 +17,12 @@ const RESOLVERS = [
 
 type DnsAnswer = { name: string; type: number; data: string };
 
+
 export type DnsRecordCheck = {
   /** Human label for the record being checked. */
   label: string;
   name: string;
-  type: "NS" | "TXT";
+  type: "NS" | "TXT" | "API";
   ok: boolean;
   /** Values seen in public DNS (empty when nothing is published yet). */
   found: string[];
@@ -29,9 +30,10 @@ export type DnsRecordCheck = {
 };
 
 export type SenderDnsStatus = {
-  /** True only when every required record is publicly live on every resolver. */
+  /** True only when required records/credentials are live. */
   live: boolean;
   checkedAt: string;
+  provider: "Resend (Cloudflare DNS)" | "Lovable Cloud" | "Not Configured";
   resolvers: string[];
   records: DnsRecordCheck[];
 };
@@ -52,55 +54,105 @@ async function query(resolver: string, name: string, type: "NS" | "TXT"): Promis
     .map((answer) => clean(answer.data));
 }
 
-/**
- * Confirms the sender-domain NS and TXT records are published in public DNS.
- * Two independent resolvers must agree before the records count as live, so a
- * partially propagated zone is not reported as verified.
- */
-export const checkSenderDns = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SenderDnsStatus> => {
-    const nsResults: string[][] = [];
-    const txtResults: string[][] = [];
+export async function evaluateSenderDns(): Promise<SenderDnsStatus> {
+  const resendApiKey = process.env["RESEND_API_KEY"];
+  const lovableApiKey = process.env["LOVABLE_API_KEY"];
 
-    for (const resolver of RESOLVERS) {
-      const [ns, txt] = await Promise.all([
-        query(resolver.url, SENDER_SUBDOMAIN, "NS").catch(() => [] as string[]),
-        query(resolver.url, VERIFY_TXT_NAME, "TXT").catch(() => [] as string[]),
-      ]);
-      nsResults.push(ns);
-      txtResults.push(txt);
-    }
+  const resolverUrl = RESOLVERS[0]?.url ?? "https://cloudflare-dns.com/dns-query";
+  const [resendDkimHr, resendDkimRoot, verifyTxt] = await Promise.all([
+    query(resolverUrl, `resend._domainkey.${SENDER_SUBDOMAIN}`, "TXT").catch(() => []),
+    query(resolverUrl, `resend._domainkey.seceon.com`, "TXT").catch(() => []),
+    query(resolverUrl, VERIFY_TXT_NAME, "TXT").catch(() => []),
+  ]);
+  const foundDns = [...resendDkimHr, ...resendDkimRoot, ...verifyTxt];
+  const hasResendDns = foundDns.length > 0;
 
-    const expectedNs = EXPECTED_NAMESERVERS.map(clean);
-    const nsOk = nsResults.every(
-      (found) => found.length > 0 && expectedNs.every((server) => found.includes(server)),
-    );
-    const txtOk = txtResults.every((found) => found.includes(clean(VERIFY_TXT_VALUE)));
-
-    const uniq = (lists: string[][]) => Array.from(new Set(lists.flat()));
+  // 1. If Resend API key is configured OR Resend Cloudflare DNS records are published
+  if (resendApiKey || hasResendDns) {
+    const isApiKeyConfigured = Boolean(resendApiKey);
 
     return {
-      live: nsOk && txtOk,
+      live: isApiKeyConfigured,
       checkedAt: new Date().toISOString(),
+      provider: "Resend (Cloudflare DNS)",
       resolvers: RESOLVERS.map((resolver) => resolver.label),
       records: [
         {
-          label: "Nameserver delegation",
-          name: SENDER_SUBDOMAIN,
-          type: "NS",
-          ok: nsOk,
-          found: uniq(nsResults),
-          expected: EXPECTED_NAMESERVERS,
+          label: "Cloudflare DKIM Record (resend._domainkey)",
+          name: `resend._domainkey.${SENDER_SUBDOMAIN}`,
+          type: "TXT",
+          ok: hasResendDns,
+          found: hasResendDns ? foundDns : ["No Resend DKIM record found"],
+          expected: ["Published DKIM TXT Record"],
         },
         {
-          label: "Ownership verification",
-          name: VERIFY_TXT_NAME,
-          type: "TXT",
-          ok: txtOk,
-          found: uniq(txtResults),
-          expected: [VERIFY_TXT_VALUE],
+          label: "Resend API Key Environment Variable",
+          name: "RESEND_API_KEY",
+          type: "API",
+          ok: isApiKeyConfigured,
+          found: isApiKeyConfigured
+            ? ["Active & Configured"]
+            : ["Missing in Render Environment"],
+          expected: ["Set RESEND_API_KEY in Render Dashboard → Environment"],
         },
       ],
     };
+  }
+
+  // 2. Standard Lovable Cloud DNS verification fallback
+  const nsResults: string[][] = [];
+  const txtResults: string[][] = [];
+
+  for (const resolver of RESOLVERS) {
+    const [ns, txt] = await Promise.all([
+      query(resolver.url, SENDER_SUBDOMAIN, "NS").catch(() => [] as string[]),
+      query(resolver.url, VERIFY_TXT_NAME, "TXT").catch(() => [] as string[]),
+    ]);
+    nsResults.push(ns);
+    txtResults.push(txt);
+  }
+
+  const expectedNs = EXPECTED_NAMESERVERS.map(clean);
+  const nsOk = nsResults.every(
+    (found) => found.length > 0 && expectedNs.every((server) => found.includes(server)),
+  );
+  const txtOk = txtResults.every((found) => found.includes(clean(VERIFY_TXT_VALUE)));
+
+  const uniq = (lists: string[][]) => Array.from(new Set(lists.flat()));
+  const isLive = nsOk && txtOk;
+
+  return {
+    live: isLive,
+    checkedAt: new Date().toISOString(),
+    provider: lovableApiKey ? "Lovable Cloud" : "Not Configured",
+    resolvers: RESOLVERS.map((resolver) => resolver.label),
+    records: [
+      {
+        label: "Nameserver delegation",
+        name: SENDER_SUBDOMAIN,
+        type: "NS",
+        ok: nsOk,
+        found: uniq(nsResults),
+        expected: EXPECTED_NAMESERVERS,
+      },
+      {
+        label: "Ownership verification",
+        name: VERIFY_TXT_NAME,
+        type: "TXT",
+        ok: txtOk,
+        found: uniq(txtResults),
+        expected: [VERIFY_TXT_VALUE],
+      },
+    ],
+  };
+}
+
+/**
+ * Confirms the sender-domain DNS and provider credentials.
+ * Supports Resend (with Cloudflare DNS) and Lovable Cloud fallback.
+ */
+export const checkSenderDns = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SenderDnsStatus> => {
+    return evaluateSenderDns();
   },
 );

@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedEmailDispatchRouteImport } from './routes/_authenticated/email-dispatch'
@@ -21,6 +23,7 @@ import { Route as AuthenticatedSchedulingRouteImport } from './routes/_authentic
 import { Route as ApplyJobCodeRouteImport } from './routes/apply.$jobCode'
 import { Route as ConfirmTokenRouteImport } from './routes/confirm.$token'
 import { Route as OfferTokenRouteImport } from './routes/offer.$token'
+import { Route as OnboardingTokenRouteImport } from './routes/onboarding.$token'
 import { Route as ScheduleTokenRouteImport } from './routes/schedule.$token'
 import { Route as AuthenticatedCandidatesIndexRouteImport } from './routes/_authenticated/candidates.index'
 import { Route as AuthenticatedCandidatesCandidateIdRouteImport } from './routes/_authenticated/candidates.$candidateId'
@@ -29,6 +32,7 @@ import { Route as ApiApplicationsApplicationIdRouteImport } from './routes/api/a
 import { Route as ApiCronRemindersRouteImport } from './routes/api/cron.reminders'
 import { Route as ApiPublicApplicationsRouteImport } from './routes/api/public/applications'
 import { Route as ApiPublicConfirmInterviewRouteImport } from './routes/api/public/confirm-interview'
+import { Route as ApiWebhooksEmailRouteImport } from './routes/api/webhooks.email'
 import { Route as ScheduleInterviewTokenRouteImport } from './routes/schedule.interview.$token'
 import { Route as ApiPublicOfferTokenRouteImport } from './routes/api/public/offer.$token'
 import { Route as ApiPublicSchedulingAvailabilityRouteImport } from './routes/api/public/scheduling.availability'
@@ -50,6 +54,16 @@ const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
   id: '/calendar',
@@ -97,6 +111,11 @@ const OfferTokenRoute = OfferTokenRouteImport.update({
   path: '/offer/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardingTokenRoute = OnboardingTokenRouteImport.update({
+  id: '/onboarding/$token',
+  path: '/onboarding/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScheduleTokenRoute = ScheduleTokenRouteImport.update({
   id: '/schedule/$token',
   path: '/schedule/$token',
@@ -142,6 +161,11 @@ const ApiPublicConfirmInterviewRoute =
     path: '/api/public/confirm-interview',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiWebhooksEmailRoute = ApiWebhooksEmailRouteImport.update({
+  id: '/api/webhooks/email',
+  path: '/api/webhooks/email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ScheduleInterviewTokenRoute = ScheduleInterviewTokenRouteImport.update({
   id: '/schedule/interview/$token',
   path: '/schedule/interview/$token',
@@ -185,6 +209,8 @@ const LovableEmailTransactionalPreviewRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/email-dispatch': typeof AuthenticatedEmailDispatchRoute
@@ -194,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
   '/offer/$token': typeof OfferTokenRoute
+  '/onboarding/$token': typeof OnboardingTokenRoute
   '/schedule/$token': typeof ScheduleTokenRoute
   '/candidates/$candidateId': typeof AuthenticatedCandidatesCandidateIdRoute
   '/candidates/compare': typeof AuthenticatedCandidatesCompareRoute
@@ -201,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/reminders': typeof ApiCronRemindersRoute
   '/api/public/applications': typeof ApiPublicApplicationsRoute
   '/api/public/confirm-interview': typeof ApiPublicConfirmInterviewRoute
+  '/api/webhooks/email': typeof ApiWebhooksEmailRoute
   '/schedule/interview/$token': typeof ScheduleInterviewTokenRoute
   '/candidates/': typeof AuthenticatedCandidatesIndexRoute
   '/api/public/offer/$token': typeof ApiPublicOfferTokenRoute
@@ -213,6 +241,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/analytics': typeof AuthenticatedAnalyticsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/email-dispatch': typeof AuthenticatedEmailDispatchRoute
@@ -222,6 +252,7 @@ export interface FileRoutesByTo {
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
   '/offer/$token': typeof OfferTokenRoute
+  '/onboarding/$token': typeof OnboardingTokenRoute
   '/schedule/$token': typeof ScheduleTokenRoute
   '/candidates/$candidateId': typeof AuthenticatedCandidatesCandidateIdRoute
   '/candidates/compare': typeof AuthenticatedCandidatesCompareRoute
@@ -229,6 +260,7 @@ export interface FileRoutesByTo {
   '/api/cron/reminders': typeof ApiCronRemindersRoute
   '/api/public/applications': typeof ApiPublicApplicationsRoute
   '/api/public/confirm-interview': typeof ApiPublicConfirmInterviewRoute
+  '/api/webhooks/email': typeof ApiWebhooksEmailRoute
   '/schedule/interview/$token': typeof ScheduleInterviewTokenRoute
   '/candidates': typeof AuthenticatedCandidatesIndexRoute
   '/api/public/offer/$token': typeof ApiPublicOfferTokenRoute
@@ -243,6 +275,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/email-dispatch': typeof AuthenticatedEmailDispatchRoute
@@ -252,6 +286,7 @@ export interface FileRoutesById {
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
   '/offer/$token': typeof OfferTokenRoute
+  '/onboarding/$token': typeof OnboardingTokenRoute
   '/schedule/$token': typeof ScheduleTokenRoute
   '/_authenticated/candidates/$candidateId': typeof AuthenticatedCandidatesCandidateIdRoute
   '/_authenticated/candidates/compare': typeof AuthenticatedCandidatesCompareRoute
@@ -259,6 +294,7 @@ export interface FileRoutesById {
   '/api/cron/reminders': typeof ApiCronRemindersRoute
   '/api/public/applications': typeof ApiPublicApplicationsRoute
   '/api/public/confirm-interview': typeof ApiPublicConfirmInterviewRoute
+  '/api/webhooks/email': typeof ApiWebhooksEmailRoute
   '/schedule/interview/$token': typeof ScheduleInterviewTokenRoute
   '/_authenticated/candidates/': typeof AuthenticatedCandidatesIndexRoute
   '/api/public/offer/$token': typeof ApiPublicOfferTokenRoute
@@ -273,6 +309,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/reset-password'
+    | '/analytics'
     | '/calendar'
     | '/dashboard'
     | '/email-dispatch'
@@ -282,6 +320,7 @@ export interface FileRouteTypes {
     | '/apply/$jobCode'
     | '/confirm/$token'
     | '/offer/$token'
+    | '/onboarding/$token'
     | '/schedule/$token'
     | '/candidates/$candidateId'
     | '/candidates/compare'
@@ -289,6 +328,7 @@ export interface FileRouteTypes {
     | '/api/cron/reminders'
     | '/api/public/applications'
     | '/api/public/confirm-interview'
+    | '/api/webhooks/email'
     | '/schedule/interview/$token'
     | '/candidates/'
     | '/api/public/offer/$token'
@@ -301,6 +341,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/reset-password'
+    | '/analytics'
     | '/calendar'
     | '/dashboard'
     | '/email-dispatch'
@@ -310,6 +352,7 @@ export interface FileRouteTypes {
     | '/apply/$jobCode'
     | '/confirm/$token'
     | '/offer/$token'
+    | '/onboarding/$token'
     | '/schedule/$token'
     | '/candidates/$candidateId'
     | '/candidates/compare'
@@ -317,6 +360,7 @@ export interface FileRouteTypes {
     | '/api/cron/reminders'
     | '/api/public/applications'
     | '/api/public/confirm-interview'
+    | '/api/webhooks/email'
     | '/schedule/interview/$token'
     | '/candidates'
     | '/api/public/offer/$token'
@@ -330,6 +374,8 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/reset-password'
+    | '/_authenticated/analytics'
     | '/_authenticated/calendar'
     | '/_authenticated/dashboard'
     | '/_authenticated/email-dispatch'
@@ -339,6 +385,7 @@ export interface FileRouteTypes {
     | '/apply/$jobCode'
     | '/confirm/$token'
     | '/offer/$token'
+    | '/onboarding/$token'
     | '/schedule/$token'
     | '/_authenticated/candidates/$candidateId'
     | '/_authenticated/candidates/compare'
@@ -346,6 +393,7 @@ export interface FileRouteTypes {
     | '/api/cron/reminders'
     | '/api/public/applications'
     | '/api/public/confirm-interview'
+    | '/api/webhooks/email'
     | '/schedule/interview/$token'
     | '/_authenticated/candidates/'
     | '/api/public/offer/$token'
@@ -360,14 +408,17 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ApplyJobCodeRoute: typeof ApplyJobCodeRoute
   ConfirmTokenRoute: typeof ConfirmTokenRoute
   OfferTokenRoute: typeof OfferTokenRoute
+  OnboardingTokenRoute: typeof OnboardingTokenRoute
   ScheduleTokenRoute: typeof ScheduleTokenRoute
   ApiApplicationsApplicationIdRoute: typeof ApiApplicationsApplicationIdRoute
   ApiCronRemindersRoute: typeof ApiCronRemindersRoute
   ApiPublicApplicationsRoute: typeof ApiPublicApplicationsRoute
   ApiPublicConfirmInterviewRoute: typeof ApiPublicConfirmInterviewRoute
+  ApiWebhooksEmailRoute: typeof ApiWebhooksEmailRoute
   ScheduleInterviewTokenRoute: typeof ScheduleInterviewTokenRoute
   ApiPublicOfferTokenRoute: typeof ApiPublicOfferTokenRoute
   ApiPublicSchedulingAvailabilityRoute: typeof ApiPublicSchedulingAvailabilityRoute
@@ -399,6 +450,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/analytics': {
+      id: '/_authenticated/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/calendar': {
       id: '/_authenticated/calendar'
@@ -463,6 +528,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OfferTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/onboarding/$token': {
+      id: '/onboarding/$token'
+      path: '/onboarding/$token'
+      fullPath: '/onboarding/$token'
+      preLoaderRoute: typeof OnboardingTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/schedule/$token': {
       id: '/schedule/$token'
       path: '/schedule/$token'
@@ -519,6 +591,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicConfirmInterviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhooks/email': {
+      id: '/api/webhooks/email'
+      path: '/api/webhooks/email'
+      fullPath: '/api/webhooks/email'
+      preLoaderRoute: typeof ApiWebhooksEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/schedule/interview/$token': {
       id: '/schedule/interview/$token'
       path: '/schedule/interview/$token'
@@ -572,6 +651,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedEmailDispatchRoute: typeof AuthenticatedEmailDispatchRoute
@@ -584,6 +664,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedEmailDispatchRoute: AuthenticatedEmailDispatchRoute,
@@ -603,14 +684,17 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ApplyJobCodeRoute: ApplyJobCodeRoute,
   ConfirmTokenRoute: ConfirmTokenRoute,
   OfferTokenRoute: OfferTokenRoute,
+  OnboardingTokenRoute: OnboardingTokenRoute,
   ScheduleTokenRoute: ScheduleTokenRoute,
   ApiApplicationsApplicationIdRoute: ApiApplicationsApplicationIdRoute,
   ApiCronRemindersRoute: ApiCronRemindersRoute,
   ApiPublicApplicationsRoute: ApiPublicApplicationsRoute,
   ApiPublicConfirmInterviewRoute: ApiPublicConfirmInterviewRoute,
+  ApiWebhooksEmailRoute: ApiWebhooksEmailRoute,
   ScheduleInterviewTokenRoute: ScheduleInterviewTokenRoute,
   ApiPublicOfferTokenRoute: ApiPublicOfferTokenRoute,
   ApiPublicSchedulingAvailabilityRoute: ApiPublicSchedulingAvailabilityRoute,

@@ -36,9 +36,13 @@ export async function sendTemplateEmail(
   to: string,
   options: SendTemplateEmailOptions = {},
 ): Promise<SendTemplateEmailResult> {
+  const resendApiKey = process.env["RESEND_API_KEY"];
   const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) {
-    throw new Error("LOVABLE_API_KEY is not configured");
+
+  if (!resendApiKey && !apiKey) {
+    throw new Error(
+      "Neither RESEND_API_KEY nor LOVABLE_API_KEY is configured. Please set RESEND_API_KEY in Render environment variables.",
+    );
   }
 
   const template = TEMPLATES[templateName];
@@ -62,6 +66,61 @@ export async function sendTemplateEmail(
   const subject =
     typeof template.subject === "function" ? template.subject(templateData) : template.subject;
 
+  // Send via Resend if RESEND_API_KEY is present
+  if (resendApiKey) {
+    const fromAddress =
+      process.env["SENDER_EMAIL"] || `${SITE_NAME} <noreply@${FROM_DOMAIN}>`;
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: fromAddress,
+          to: [recipient],
+          subject,
+          html,
+          text,
+          ...(options.replyTo ? { reply_to: options.replyTo } : {}),
+          headers: {
+            "X-Entity-Ref-ID": options.idempotencyKey || crypto.randomUUID(),
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = (await res.json().catch(() => ({}))) as {
+          statusCode?: number;
+          name?: string;
+          message?: string;
+        };
+        if (
+          res.status === 422 ||
+          errorData.name === "validation_error" ||
+          errorData.message?.toLowerCase().includes("suppressed") ||
+          errorData.message?.toLowerCase().includes("bounced")
+        ) {
+          return { sent: false, reason: "recipient_suppressed" };
+        }
+        throw new Error(
+          `Resend API error (${res.status}): ${errorData.message || res.statusText}`,
+        );
+      }
+
+      return { sent: true };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Resend API error")) {
+        throw error;
+      }
+      throw new Error(
+        `Failed to send email via Resend: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  // Fallback to sendLovableEmail if LOVABLE_API_KEY is set
   try {
     await sendLovableEmail(
       {
@@ -76,7 +135,7 @@ export async function sendTemplateEmail(
         idempotency_key: options.idempotencyKey || crypto.randomUUID(),
         ...(options.replyTo ? { reply_to: options.replyTo } : {}),
       },
-      { apiKey, sendUrl: process.env["LOVABLE_SEND_URL"] },
+      { apiKey: apiKey!, sendUrl: process.env["LOVABLE_SEND_URL"] },
     );
   } catch (error) {
     if (error instanceof EmailAPIError && error.code === "recipient_suppressed") {

@@ -1,280 +1,335 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_ONBOARDING_TASKS,
+  completeOnboardingAtomic,
   createOnboardingAtomic,
   recordOnboardingEvent,
+  resendOnboardingInviteAtomic,
+  resolveOnboardingToken,
+  reviewOnboardingDocument,
+  uploadCandidateDocument,
+  validateFileMagicBytes,
   verifyOnboardingEligibility,
 } from "./onboarding.server";
+import crypto from "crypto";
 
-// In-memory mock database for onboarding testing
+// In-memory mock database for Phase 6 document-driven onboarding testing
 function createMockDb(initialState?: {
   candidates?: any[];
   jobs?: any[];
   offers?: any[];
-  appointments?: any[];
   onboarding?: any[];
-  onboarding_tasks?: any[];
+  onboarding_documents?: any[];
   onboarding_events?: any[];
-  userRole?: "recruiter" | "admin" | "candidate" | "anonymous";
 }) {
   const candidates = [...(initialState?.candidates ?? [])];
   const jobs = [...(initialState?.jobs ?? [])];
   const offers = [...(initialState?.offers ?? [])];
-  const appointments = [...(initialState?.appointments ?? [])];
   const onboarding = [...(initialState?.onboarding ?? [])];
-  const onboarding_tasks = [...(initialState?.onboarding_tasks ?? [])];
+  const onboarding_documents = [...(initialState?.onboarding_documents ?? [])];
   const onboarding_events = [...(initialState?.onboarding_events ?? [])];
-  const userRole = initialState?.userRole ?? "recruiter";
+  const storageBucket: Record<string, { buffer: Buffer; contentType: string }> = {};
 
   const db: any = {
     _state: {
       candidates,
       jobs,
       offers,
-      appointments,
       onboarding,
-      onboarding_tasks,
+      onboarding_documents,
       onboarding_events,
+      storageBucket,
     },
     rpc: async (fnName: string, args: any) => {
-      if (fnName === "create_onboarding_atomic") {
-        const cand = candidates.find((c) => c.id === args.p_candidate_id);
-        if (!cand) throw new Error("Candidate not found.");
-        if (cand.application_status !== "hired") {
-          throw new Error("Only candidates with application status hired can be onboarded.");
-        }
-        const active = onboarding.find(
-          (o) =>
-            o.candidate_id === args.p_candidate_id &&
-            (o.status === "NOT_STARTED" || o.status === "IN_PROGRESS"),
-        );
-        if (active) {
-          throw new Error("Candidate already has an active onboarding record.");
-        }
+      try {
+        if (fnName === "create_onboarding_atomic") {
+          const cand = candidates.find((c) => c.id === args.p_candidate_id);
+          if (!cand) throw new Error("Candidate not found.");
+          if (cand.application_status !== "hired") {
+            throw new Error("Only candidates with application status hired can be onboarded.");
+          }
+          const active = onboarding.find(
+            (o) =>
+              o.candidate_id === args.p_candidate_id &&
+              (o.status === "NOT_STARTED" || o.status === "IN_PROGRESS"),
+          );
+          if (active) {
+            throw new Error("Candidate already has an active onboarding record.");
+          }
 
-        let startDate = args.p_start_date;
-        if (!startDate) {
-          const acceptedOffer = offers
-            .filter((o) => o.candidate_id === args.p_candidate_id && o.status === "ACCEPTED")
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-          startDate = acceptedOffer?.start_date || null;
-        }
+          let startDate = args.p_start_date;
+          if (!startDate) {
+            const acceptedOffer = offers
+              .filter((o) => o.candidate_id === args.p_candidate_id && o.status === "ACCEPTED")
+              .sort(
+                (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+              )[0];
+            startDate = acceptedOffer?.start_date || null;
+          }
 
-        const newOnboarding = {
-          id: `onb-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          candidate_id: args.p_candidate_id,
-          job_id: cand.job_id || null,
-          start_date: startDate,
-          status: "NOT_STARTED",
-          created_by: args.p_created_by || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          completed_at: null,
-        };
-        onboarding.push(newOnboarding);
+          const rawToken = crypto.randomBytes(32).toString("hex");
+          const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+          const expiresAt = new Date(Date.now() + 14 * 86400 * 1000).toISOString();
 
-        const defaultTasks = DEFAULT_ONBOARDING_TASKS.map((t, idx) => ({
-          id: `task-${newOnboarding.id}-${idx}`,
-          onboarding_id: newOnboarding.id,
-          title: t.title,
-          description: t.description,
-          status: "PENDING",
-          due_date: null,
-          completed_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
-        onboarding_tasks.push(...defaultTasks);
-
-        onboarding_events.push({
-          id: `event-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          onboarding_id: newOnboarding.id,
-          candidate_id: args.p_candidate_id,
-          event_type: "ONBOARDING_CREATED",
-          notes: "Onboarding record and 7 default tasks created.",
-          created_by: args.p_created_by || null,
-          created_at: new Date().toISOString(),
-        });
-
-        return {
-          data: {
-            id: newOnboarding.id,
-            candidate_id: newOnboarding.candidate_id,
-            job_id: newOnboarding.job_id,
-            start_date: newOnboarding.start_date,
+          const onbId = `onb-${Date.now()}-${Math.random()}`;
+          const newOnboarding = {
+            id: onbId,
+            candidate_id: args.p_candidate_id,
+            job_id: cand.job_id,
+            start_date: startDate,
             status: "NOT_STARTED",
-          },
-          error: null,
-        };
+            candidate_token_hash: tokenHash,
+            token_expires_at: expiresAt,
+            token_revoked_at: null,
+            created_by: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          onboarding.push(newOnboarding);
+
+          // Seed 3 default requirements
+          const defaultDocs = [
+            {
+              id: `doc-1-${onbId}`,
+              onboarding_id: onbId,
+              requirement_key: "identity_verification",
+              title: "Identity Verification",
+              description: "Upload government ID or passport.",
+              is_required: true,
+              document_status: "NOT_SUBMITTED",
+              storage_path: null,
+              document_name: null,
+              created_at: new Date().toISOString(),
+            },
+            {
+              id: `doc-2-${onbId}`,
+              onboarding_id: onbId,
+              requirement_key: "signed_offer_letter",
+              title: "Signed Offer Letter",
+              description: "Upload countersigned offer letter.",
+              is_required: true,
+              document_status: "NOT_SUBMITTED",
+              storage_path: null,
+              document_name: null,
+              created_at: new Date().toISOString(),
+            },
+            {
+              id: `doc-3-${onbId}`,
+              onboarding_id: onbId,
+              requirement_key: "payroll_tax_forms",
+              title: "Payroll & Tax Documentation",
+              description: "Upload tax forms and bank details.",
+              is_required: true,
+              document_status: "NOT_SUBMITTED",
+              storage_path: null,
+              document_name: null,
+              created_at: new Date().toISOString(),
+            },
+          ];
+          onboarding_documents.push(...defaultDocs);
+
+          onboarding_events.push({
+            id: `ev-${Date.now()}`,
+            onboarding_id: onbId,
+            candidate_id: args.p_candidate_id,
+            event_type: "ONBOARDING_CREATED",
+            notes: "Onboarding record created with required document compliance items.",
+            created_at: new Date().toISOString(),
+          });
+
+          return {
+            data: {
+              id: onbId,
+              candidate_id: args.p_candidate_id,
+              job_id: cand.job_id,
+              start_date: startDate,
+              status: "NOT_STARTED",
+              raw_token: rawToken,
+              token_expires_at: expiresAt,
+            },
+            error: null,
+          };
+        }
+
+        if (fnName === "resend_onboarding_invite_atomic") {
+          const onb = onboarding.find((o) => o.id === args.p_onboarding_id);
+          if (!onb) throw new Error("Onboarding record not found.");
+          if (onb.status === "CANCELLED")
+            throw new Error("Cannot resend invitation for cancelled onboarding.");
+          if (onb.status === "COMPLETED")
+            throw new Error("Cannot resend invitation for already completed onboarding.");
+
+          const rawToken = crypto.randomBytes(32).toString("hex");
+          const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+          const expiresAt = new Date(Date.now() + 14 * 86400 * 1000).toISOString();
+
+          onb.candidate_token_hash = tokenHash;
+          onb.token_expires_at = expiresAt;
+          onb.token_revoked_at = null;
+
+          return {
+            data: {
+              id: onb.id,
+              candidate_id: onb.candidate_id,
+              raw_token: rawToken,
+              token_expires_at: expiresAt,
+            },
+            error: null,
+          };
+        }
+
+        if (fnName === "resolve_onboarding_token") {
+          const tokenHash = crypto.createHash("sha256").update(args.p_token).digest("hex");
+          const onb = onboarding.find(
+            (o) => o.candidate_token_hash === tokenHash && !o.token_revoked_at,
+          );
+          if (!onb) throw new Error("Invalid or revoked onboarding invitation link.");
+          if (onb.token_expires_at && new Date(onb.token_expires_at) < new Date()) {
+            throw new Error("Onboarding invitation link has expired.");
+          }
+          if (onb.status === "CANCELLED") {
+            throw new Error("This onboarding process has been cancelled.");
+          }
+
+          if (onb.status === "NOT_STARTED") {
+            onb.status = "IN_PROGRESS";
+            onboarding_events.push({
+              id: `ev-${Date.now()}`,
+              onboarding_id: onb.id,
+              candidate_id: onb.candidate_id,
+              event_type: "ONBOARDING_STARTED",
+              notes: "Candidate opened portal",
+              created_at: new Date().toISOString(),
+            });
+          }
+
+          const cand = candidates.find((c) => c.id === onb.candidate_id);
+          const j = jobs.find((job) => job.id === onb.job_id);
+          const docs = onboarding_documents.filter((d) => d.onboarding_id === onb.id);
+
+          return {
+            data: {
+              status: onb.status,
+              start_date: onb.start_date,
+              candidate: { full_name: cand?.full_name || "" },
+              job: { title: j?.title || "Role", department: j?.department },
+              documents: docs.map((d) => ({
+                id: d.id,
+                requirement_key: d.requirement_key,
+                title: d.title,
+                description: d.description,
+                is_required: d.is_required,
+                document_status: d.document_status,
+                document_name: d.document_name,
+                file_size_bytes: d.file_size_bytes,
+                uploaded_at: d.uploaded_at,
+                review_notes: d.review_notes,
+              })),
+            },
+            error: null,
+          };
+        }
+
+        throw new Error(`Unknown RPC: ${fnName}`);
+      } catch (err: any) {
+        return { data: null, error: { message: err.message } };
       }
-      return { data: null, error: new Error(`Unknown RPC ${fnName}`) };
+    },
+    storage: {
+      from: (_bucket: string) => ({
+        upload: async (path: string, buffer: Buffer, opts: { contentType: string }) => {
+          storageBucket[path] = { buffer, contentType: opts.contentType };
+          return { error: null };
+        },
+        remove: async (paths: string[]) => {
+          paths.forEach((p) => delete storageBucket[p]);
+          return { error: null };
+        },
+      }),
     },
     from: (table: string) => {
-      let currentTable: any[] = [];
-      if (table === "candidates") currentTable = candidates;
-      else if (table === "jobs") currentTable = jobs;
-      else if (table === "offers") currentTable = offers;
-      else if (table === "appointments") currentTable = appointments;
-      else if (table === "onboarding") currentTable = onboarding;
-      else if (table === "onboarding_tasks") currentTable = onboarding_tasks;
-      else if (table === "onboarding_events") currentTable = onboarding_events;
-
-      // RLS staff check simulation
-      const isStaff = userRole === "recruiter" || userRole === "admin";
-      const isOnboardingTable = ["onboarding", "onboarding_tasks", "onboarding_events"].includes(
-        table,
-      );
-
-      const filters: ((row: any) => boolean)[] = [];
-      let updatePayload: any = null;
-
-      if (isOnboardingTable && !isStaff) {
-        // Block access for non-staff or anonymous
-        filters.push(() => false);
-      }
-
-      const executeUpdate = () => {
-        if (!updatePayload) return [];
-        const matched = currentTable.filter((r) => filters.every((f) => f(r)));
-        matched.forEach((r) => {
-          Object.assign(r, updatePayload, { updated_at: new Date().toISOString() });
-        });
-        return matched;
-      };
+      let filtered = [...(db._state[table] || [])];
 
       const builder: any = {
-        select: (_fields?: string) => builder,
-        eq: (field: string, val: any) => {
-          filters.push((r: any) => r[field] === val);
+        select: (_cols?: string) => builder,
+        eq: (col: string, val: any) => {
+          filtered = filtered.filter((r) => r[col] === val);
           return builder;
         },
-        neq: (field: string, val: any) => {
-          filters.push((r: any) => r[field] !== val);
+        neq: (col: string, val: any) => {
+          filtered = filtered.filter((r) => r[col] !== val);
           return builder;
         },
-        in: (field: string, vals: any[]) => {
-          filters.push((r: any) => vals.includes(r[field]));
+        in: (col: string, vals: any[]) => {
+          filtered = filtered.filter((r) => vals.includes(r[col]));
           return builder;
         },
-        order: () => builder,
-        maybeSingle: async () => {
-          if (updatePayload) {
-            const updated = executeUpdate();
-            return { data: updated[0] || null, error: null };
-          }
-          const matched = currentTable.filter((r) => filters.every((f) => f(r)));
-          const row = matched[0] || null;
-          if (row && table === "onboarding_tasks") {
-            const onb = onboarding.find((o) => o.id === row.onboarding_id);
-            return { data: { ...row, onboarding: onb }, error: null };
-          }
-          return { data: row, error: null };
-        },
-        single: async () => {
-          if (updatePayload) {
-            const updated = executeUpdate();
-            return {
-              data: updated[0] || null,
-              error: updated[0] ? null : new Error("Row not found"),
-            };
-          }
-          const matched = currentTable.filter((r) => filters.every((f) => f(r)));
-          const row = matched[0] || null;
-          return { data: row, error: row ? null : new Error("Row not found") };
-        },
-        insert: (item: any) => {
-          if (isOnboardingTable && !isStaff) {
-            const errRes = { data: null, error: new Error("Row Level Security: access denied") };
-            return {
-              ...errRes,
-              select: () => ({
-                single: async () => errRes,
-                maybeSingle: async () => errRes,
-                then: (resolve: any) => resolve(errRes),
-              }),
-              then: (resolve: any) => resolve(errRes),
-            };
-          }
-
-          const itemsToInsert = Array.isArray(item) ? item : [item];
-          const insertedList: any[] = [];
-
-          for (const it of itemsToInsert) {
-            // Partial uniqueness check for active onboarding
-            if (table === "onboarding") {
-              const activeExists = onboarding.some(
-                (o) =>
-                  o.candidate_id === it.candidate_id &&
-                  (o.status === "NOT_STARTED" || o.status === "IN_PROGRESS"),
-              );
-              if (activeExists && (it.status === "NOT_STARTED" || it.status === "IN_PROGRESS")) {
-                const dupErr = {
-                  data: null,
-                  error: new Error(
-                    "duplicate key value violates unique constraint idx_onboarding_candidate_active",
-                  ),
-                };
-                return {
-                  ...dupErr,
-                  select: () => ({
-                    single: async () => dupErr,
-                    maybeSingle: async () => dupErr,
-                    then: (resolve: any) => resolve(dupErr),
-                  }),
-                  then: (resolve: any) => resolve(dupErr),
-                };
-              }
-            }
-
-            const inserted = {
-              id: it.id || `mock-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              ...it,
-            };
-            currentTable.push(inserted);
-            insertedList.push(inserted);
-          }
-
-          const resultData = Array.isArray(item) ? insertedList : insertedList[0];
-          return {
-            data: resultData,
-            error: null,
-            select: () => ({
-              single: async () => ({ data: insertedList[0], error: null }),
-              maybeSingle: async () => ({ data: insertedList[0], error: null }),
-              then: (resolve: any) => resolve({ data: resultData, error: null }),
-            }),
-            then: (resolve: any) => resolve({ data: resultData, error: null }),
-          };
-        },
-        update: (payload: any) => {
-          if (isOnboardingTable && !isStaff) {
-            updatePayload = null;
-          } else {
-            updatePayload = payload;
-          }
+        is: (col: string, val: any) => {
+          filtered = filtered.filter((r) => r[col] === val);
           return builder;
         },
-        delete: () => {
-          if (isOnboardingTable && !isStaff) {
-            return builder;
-          }
-          const toRemove = currentTable.filter((r) => filters.every((f) => f(r)));
-          toRemove.forEach((r) => {
-            const idx = currentTable.indexOf(r);
-            if (idx >= 0) currentTable.splice(idx, 1);
+        order: (col: string, opts?: { ascending?: boolean }) => {
+          filtered.sort((a, b) => {
+            const asc = opts?.ascending ?? true;
+            return asc ? (a[col] > b[col] ? 1 : -1) : a[col] < b[col] ? 1 : -1;
           });
           return builder;
         },
-        then: (onfulfilled: any, onrejected: any) => {
-          if (updatePayload) {
-            const updated = executeUpdate();
-            return Promise.resolve({ data: updated, error: null }).then(onfulfilled, onrejected);
-          }
-          const matched = currentTable.filter((r) => filters.every((f) => f(r)));
-          return Promise.resolve({ data: matched, error: null }).then(onfulfilled, onrejected);
+        maybeSingle: async () => ({
+          data: filtered.length > 0 ? filtered[0] : null,
+          error: null,
+        }),
+        single: async () => ({
+          data: filtered.length > 0 ? filtered[0] : null,
+          error: filtered.length > 0 ? null : { message: "No rows found" },
+        }),
+        insert: async (records: any) => {
+          const recArray = Array.isArray(records) ? records : [records];
+          const inserted = recArray.map((r) => ({
+            id: r.id || `gen-${Date.now()}-${Math.random()}`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            ...r,
+          }));
+          db._state[table].push(...inserted);
+          return {
+            data: Array.isArray(records) ? inserted : inserted[0],
+            error: null,
+            select: () => ({
+              single: async () => ({ data: inserted[0], error: null }),
+            }),
+          };
         },
+        update: (updates: any) => {
+          const conditions: Array<{ col: string; val: any }> = [];
+          const execute = () => {
+            const matched = db._state[table].filter((r: any) =>
+              conditions.every((c) => r[c.col] === c.val),
+            );
+            matched.forEach((r: any) => Object.assign(r, updates));
+            return matched;
+          };
+          const chain: any = {
+            eq: (col: string, val: any) => {
+              conditions.push({ col, val });
+              return chain;
+            },
+            select: () => ({
+              single: async () => ({ data: execute()[0] || null, error: null }),
+              maybeSingle: async () => ({ data: execute()[0] || null, error: null }),
+            }),
+            then: (resolve: any) => resolve({ data: execute(), error: null }),
+          };
+          return chain;
+        },
+        delete: () => {
+          return {
+            eq: (col: string, val: any) => {
+              db._state[table] = db._state[table].filter((r: any) => r[col] !== val);
+              return { error: null };
+            },
+          };
+        },
+        then: (resolve: any) => resolve({ data: filtered, error: null }),
       };
 
       return builder;
@@ -284,679 +339,389 @@ function createMockDb(initialState?: {
   return db;
 }
 
-describe("Phase 6A: Onboarding & Employee Handoff Lifecycle Test Suite", () => {
-  const testCandidate = {
+describe("Phase 6 Document-Driven Onboarding Suite", () => {
+  const candidateHired = {
     id: "cand-hired-1",
-    full_name: "Elena Rostova",
-    email: "elena.rostova@example.com",
-    ats_score: 95,
-    stage: "hired",
+    full_name: "Alex Smith",
+    email: "alex@example.com",
+    job_id: "job-eng-1",
     application_status: "hired",
-    job_id: "job-lead-devops",
-    applied_role: "Lead DevOps Engineer",
   };
 
-  const testAcceptedOffer = {
-    id: "offer-elena-1",
+  const candidateNotHired = {
+    id: "cand-eval-2",
+    full_name: "Bob Jones",
+    email: "bob@example.com",
+    job_id: "job-eng-1",
+    application_status: "interviewing",
+  };
+
+  const job1 = {
+    id: "job-eng-1",
+    title: "Senior Fullstack Engineer",
+    department: "Engineering",
+  };
+
+  const acceptedOffer = {
+    id: "offer-1",
     candidate_id: "cand-hired-1",
-    job_id: "job-lead-devops",
-    compensation: 1250000,
-    currency: "INR",
-    start_date: "2026-10-15",
     status: "ACCEPTED",
-    created_at: "2026-09-20T12:00:00Z",
+    start_date: "2026-10-15",
+    created_at: new Date(Date.now() - 86400000).toISOString(),
   };
 
-  const completedInterview = {
-    id: "appt-interview-1",
-    candidate_id: "cand-hired-1",
-    appointment_type: "INTERVIEW",
-    status: "COMPLETED",
-  };
+  describe("1. Authoritative Backend Eligibility Check", () => {
+    it("eligible candidate with application_status = 'hired' passes verification", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+      });
 
-  // 1. Hired candidate can create onboarding
-  it("1. Hired candidate can create onboarding", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      offers: [testAcceptedOffer],
-      appointments: [completedInterview],
+      const res = await verifyOnboardingEligibility(db, "cand-hired-1");
+      expect(res.eligible).toBe(true);
+      expect(res.defaultStartDate).toBe("2026-10-15");
+      expect(res.candidate?.full_name).toBe("Alex Smith");
     });
 
-    const eligibility = await verifyOnboardingEligibility(db, testCandidate.id);
-    expect(eligibility.eligible).toBe(true);
-    expect(eligibility.candidate?.application_status).toBe("hired");
+    it("rejects candidate whose application_status is not 'hired'", async () => {
+      const db = createMockDb({
+        candidates: [candidateNotHired],
+      });
 
-    const result = await createOnboardingAtomic(db, {
-      candidateId: testCandidate.id,
+      const res = await verifyOnboardingEligibility(db, "cand-eval-2");
+      expect(res.eligible).toBe(false);
+      expect(res.reason).toContain("Only candidates with application status 'hired'");
     });
 
-    expect(result.onboarding).toBeDefined();
-    expect(result.onboarding.status).toBe("NOT_STARTED");
-    expect(result.tasks).toHaveLength(7);
-    expect(result.onboarding.start_date).toBe("2026-10-15"); // Defaults to accepted offer date
+    it("rejects candidate who already has an active onboarding record", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        onboarding: [
+          {
+            id: "onb-existing",
+            candidate_id: "cand-hired-1",
+            status: "IN_PROGRESS",
+          },
+        ],
+      });
+
+      const res = await verifyOnboardingEligibility(db, "cand-hired-1");
+      expect(res.eligible).toBe(false);
+      expect(res.reason).toContain("Candidate already has an active onboarding record");
+    });
   });
 
-  // 2. Non-hired candidate cannot create onboarding
-  it("2. Non-hired candidate cannot create onboarding", async () => {
-    const db = createMockDb({
-      candidates: [{ ...testCandidate, id: "cand-offer-sent", application_status: "offer_sent" }],
+  describe("2. Document-Driven Atomic Onboarding Creation", () => {
+    it("creates onboarding, seeds 3 default document requirements, and generates 256-bit token", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
+
+      const result = await createOnboardingAtomic(db, {
+        candidateId: "cand-hired-1",
+      });
+
+      expect(result.onboarding.id).toBeDefined();
+      expect(result.onboarding.status).toBe("NOT_STARTED");
+      expect(result.onboarding.start_date).toBe("2026-10-15");
+      expect(result.rawToken).toHaveLength(64); // 32 bytes hex = 64 characters
+      expect(result.tokenExpiresAt).toBeDefined();
+
+      // Check documents seeded
+      expect(result.documents).toHaveLength(3);
+      const keys = result.documents.map((d) => d.requirement_key);
+      expect(keys).toContain("identity_verification");
+      expect(keys).toContain("signed_offer_letter");
+      expect(keys).toContain("payroll_tax_forms");
+
+      // Verify stored candidate_token_hash is SHA-256 of rawToken
+      const expectedHash = crypto.createHash("sha256").update(result.rawToken).digest("hex");
+      const storedOnboarding = db._state.onboarding.find((o: any) => o.id === result.onboarding.id);
+      expect(storedOnboarding.candidate_token_hash).toBe(expectedHash);
     });
-
-    const eligibility = await verifyOnboardingEligibility(db, "cand-offer-sent");
-    expect(eligibility.eligible).toBe(false);
-    expect(eligibility.reason).toContain("Only candidates with application status 'hired'");
-
-    await expect(createOnboardingAtomic(db, { candidateId: "cand-offer-sent" })).rejects.toThrow(
-      /Only candidates with application status 'hired'/,
-    );
   });
 
-  // 3. Filtered candidate rejected
-  it("3. Filtered candidate rejected", async () => {
-    const db = createMockDb({
-      candidates: [{ ...testCandidate, id: "cand-filtered", application_status: "filtered_out" }],
+  describe("3. Candidate Portal Token Resolution & Data Minimization", () => {
+    it("resolves token, auto-transitions NOT_STARTED -> IN_PROGRESS, and minimizes data", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
+
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
+      const portal = await resolveOnboardingToken(db, created.rawToken);
+
+      expect(portal.status).toBe("IN_PROGRESS");
+      expect(portal.candidate.full_name).toBe("Alex Smith");
+      expect(portal.job.title).toBe("Senior Fullstack Engineer");
+      expect(portal.documents).toHaveLength(3);
+
+      // Data minimization check: no sensitive candidate data leaked
+      expect((portal as any).candidate_id).toBeUndefined();
+      expect((portal as any).onboarding_id).toBeUndefined();
+      expect((portal as any).salary).toBeUndefined();
+      portal.documents.forEach((d) => {
+        expect((d as any).storage_path).toBeUndefined();
+      });
     });
 
-    const eligibility = await verifyOnboardingEligibility(db, "cand-filtered");
-    expect(eligibility.eligible).toBe(false);
-
-    await expect(createOnboardingAtomic(db, { candidateId: "cand-filtered" })).rejects.toThrow(
-      /Only candidates with application status 'hired'/,
-    );
+    it("rejects invalid or expired token", async () => {
+      const db = createMockDb();
+      await expect(resolveOnboardingToken(db, "invalid-token")).rejects.toThrow(
+        "Invalid or revoked onboarding invitation link.",
+      );
+    });
   });
 
-  // 4. Offer-declined candidate rejected
-  it("4. Offer-declined candidate rejected", async () => {
-    const db = createMockDb({
-      candidates: [{ ...testCandidate, id: "cand-declined", application_status: "offer_declined" }],
+  describe("4. Magic-Byte File Validation & Candidate Uploads", () => {
+    it("validates PDF magic bytes (%PDF-)", () => {
+      const pdfBuffer = Buffer.from("%PDF-1.4 test content");
+      expect(validateFileMagicBytes(pdfBuffer, "application/pdf")).toBe(true);
+
+      const fakePdf = Buffer.from("NOT_A_PDF content");
+      expect(validateFileMagicBytes(fakePdf, "application/pdf")).toBe(false);
     });
 
-    const eligibility = await verifyOnboardingEligibility(db, "cand-declined");
-    expect(eligibility.eligible).toBe(false);
+    it("validates PNG magic bytes (\\x89PNG)", () => {
+      const pngBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      expect(validateFileMagicBytes(pngBuffer, "image/png")).toBe(true);
+    });
 
-    await expect(createOnboardingAtomic(db, { candidateId: "cand-declined" })).rejects.toThrow(
-      /Only candidates with application status 'hired'/,
-    );
+    it("validates JPEG magic bytes (\\xFF\\xD8\\xFF)", () => {
+      const jpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+      expect(validateFileMagicBytes(jpegBuffer, "image/jpeg")).toBe(true);
+    });
+
+    it("uploads candidate document with validation and sets status to PENDING_REVIEW", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
+
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
+      const docId = created.documents[0]!.id;
+      const pdfBuffer = Buffer.from("%PDF-1.5 Sample Government ID Document Content");
+
+      const uploadResult = await uploadCandidateDocument(db, {
+        token: created.rawToken,
+        documentId: docId,
+        fileBuffer: pdfBuffer,
+        fileName: "passport_scan.pdf",
+        mimeType: "application/pdf",
+      });
+
+      expect(uploadResult.success).toBe(true);
+      expect(uploadResult.document.document_status).toBe("PENDING_REVIEW");
+      expect(uploadResult.document.document_name).toBe("passport_scan.pdf");
+      expect(uploadResult.document.storage_path).toContain("passport_scan.pdf");
+      expect(uploadResult.document.file_size_bytes).toBe(pdfBuffer.length);
+
+      // Verify audit event emitted
+      const events = db._state.onboarding_events;
+      const uploadEvent = events.find((e: any) => e.event_type === "ONBOARDING_DOC_UPLOADED");
+      expect(uploadEvent).toBeDefined();
+    });
+
+    it("rejects file exceeding 8 MB limit", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
+
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
+      const docId = created.documents[0]!.id;
+      const oversizedBuffer = Buffer.alloc(9 * 1024 * 1024); // 9 MB
+
+      await expect(
+        uploadCandidateDocument(db, {
+          token: created.rawToken,
+          documentId: docId,
+          fileBuffer: oversizedBuffer,
+          fileName: "huge.pdf",
+          mimeType: "application/pdf",
+        }),
+      ).rejects.toThrow("File size exceeds 8 MB limit.");
+    });
   });
 
-  // 5. Candidate with no completed offer acceptance rejected
-  it("5. Candidate with no completed offer acceptance rejected (not yet hired)", async () => {
-    const db = createMockDb({
-      candidates: [
-        { ...testCandidate, id: "cand-interviewing", application_status: "interview_scheduled" },
-      ],
+  describe("5. Recruiter Document Review & Mandatory Rejection Notes", () => {
+    it("recruiter can verify uploaded document", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
+
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
+      const docId = created.documents[0]!.id;
+      const pdfBuffer = Buffer.from("%PDF-1.4 Content");
+
+      await uploadCandidateDocument(db, {
+        token: created.rawToken,
+        documentId: docId,
+        fileBuffer: pdfBuffer,
+        fileName: "id.pdf",
+        mimeType: "application/pdf",
+      });
+
+      const reviewed = await reviewOnboardingDocument(db, {
+        onboardingId: created.onboarding.id,
+        documentId: docId,
+        decision: "VERIFIED",
+        reviewerId: "staff-recruiter-1",
+      });
+
+      expect(reviewed.document_status).toBe("VERIFIED");
+      expect(reviewed.reviewed_by).toBe("staff-recruiter-1");
+
+      const event = db._state.onboarding_events.find(
+        (e: any) => e.event_type === "ONBOARDING_DOC_VERIFIED",
+      );
+      expect(event).toBeDefined();
     });
 
-    const eligibility = await verifyOnboardingEligibility(db, "cand-interviewing");
-    expect(eligibility.eligible).toBe(false);
+    it("rejecting document requires non-empty review notes", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
 
-    await expect(
-      createOnboardingAtomic(db, { candidateId: "cand-interviewing" }),
-    ).rejects.toThrow();
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
+      const docId = created.documents[0]!.id;
+
+      await expect(
+        reviewOnboardingDocument(db, {
+          onboardingId: created.onboarding.id,
+          documentId: docId,
+          decision: "REJECTED",
+          reviewNotes: "   ",
+          reviewerId: "staff-recruiter-1",
+        }),
+      ).rejects.toThrow("Review notes are required when rejecting a document.");
+    });
+
+    it("rejecting document with review notes updates status and emits ONBOARDING_DOC_REJECTED", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
+
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
+      const docId = created.documents[0]!.id;
+
+      const reviewed = await reviewOnboardingDocument(db, {
+        onboardingId: created.onboarding.id,
+        documentId: docId,
+        decision: "REJECTED",
+        reviewNotes: "Photo is blurry and expired. Please upload valid passport.",
+        reviewerId: "staff-recruiter-1",
+      });
+
+      expect(reviewed.document_status).toBe("REJECTED");
+      expect(reviewed.review_notes).toBe(
+        "Photo is blurry and expired. Please upload valid passport.",
+      );
+
+      const event = db._state.onboarding_events.find(
+        (e: any) => e.event_type === "ONBOARDING_DOC_REJECTED",
+      );
+      expect(event).toBeDefined();
+    });
   });
 
-  // 6. Duplicate active onboarding prevented
-  it("6. Duplicate active onboarding prevented", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      offers: [testAcceptedOffer],
-      onboarding: [
-        {
-          id: "onb-existing",
-          candidate_id: testCandidate.id,
-          status: "NOT_STARTED",
-          start_date: "2026-10-15",
-        },
-      ],
+  describe("6. Server-Side Completion Gate", () => {
+    it("prevents completion if any required document is not verified", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
+
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
+
+      // Verify only 1 of 3 documents
+      await reviewOnboardingDocument(db, {
+        onboardingId: created.onboarding.id,
+        documentId: created.documents[0]!.id,
+        decision: "VERIFIED",
+        reviewerId: "staff-1",
+      });
+
+      await expect(
+        completeOnboardingAtomic(db, {
+          onboardingId: created.onboarding.id,
+          actorId: "staff-1",
+        }),
+      ).rejects.toThrow("Cannot complete onboarding: 2 required document(s) are not verified");
     });
 
-    const eligibility = await verifyOnboardingEligibility(db, testCandidate.id);
-    expect(eligibility.eligible).toBe(false);
-    expect(eligibility.reason).toContain("already has an active onboarding record");
+    it("successfully completes onboarding when all required documents are VERIFIED", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
 
-    await expect(createOnboardingAtomic(db, { candidateId: testCandidate.id })).rejects.toThrow(
-      /already has an active onboarding record/,
-    );
-  });
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
 
-  // 7. Onboarding starts correctly
-  it("7. Onboarding starts correctly (NOT_STARTED → IN_PROGRESS)", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [
-        {
-          id: "onb-1",
-          candidate_id: testCandidate.id,
-          status: "NOT_STARTED",
-          start_date: "2026-10-15",
-        },
-      ],
-    });
+      // Put into IN_PROGRESS
+      db._state.onboarding[0].status = "IN_PROGRESS";
 
-    const { data: updated } = await db
-      .from("onboarding")
-      .update({ status: "IN_PROGRESS" })
-      .eq("id", "onb-1")
-      .eq("status", "NOT_STARTED")
-      .select()
-      .maybeSingle();
-
-    expect(updated).toBeDefined();
-    expect(updated?.status).toBe("IN_PROGRESS");
-
-    await recordOnboardingEvent(db, {
-      onboardingId: "onb-1",
-      candidateId: testCandidate.id,
-      eventType: "ONBOARDING_STARTED",
-      notes: "Onboarding started",
-    });
-
-    const events = db._state.onboarding_events;
-    expect(events.some((e: any) => e.event_type === "ONBOARDING_STARTED")).toBe(true);
-  });
-
-  // 8. Invalid status transition rejected
-  it("8. Invalid status transition rejected", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [
-        {
-          id: "onb-1",
-          candidate_id: testCandidate.id,
-          status: "COMPLETED",
-          start_date: "2026-10-15",
-        },
-      ],
-    });
-
-    // Attempting to transition COMPLETED → IN_PROGRESS must fail
-    const { data: updated } = await db
-      .from("onboarding")
-      .update({ status: "IN_PROGRESS" })
-      .eq("id", "onb-1")
-      .eq("status", "NOT_STARTED")
-      .select()
-      .maybeSingle();
-
-    expect(updated).toBeNull();
-  });
-
-  // 9. Task can be completed
-  it("9. Task can be completed", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-      onboarding_tasks: [
-        {
-          id: "task-1",
-          onboarding_id: "onb-1",
-          title: "Verify identity documents",
-          status: "PENDING",
-        },
-      ],
-    });
-
-    const completedAt = new Date().toISOString();
-    const { data: updated } = await db
-      .from("onboarding_tasks")
-      .update({ status: "COMPLETED", completed_at: completedAt })
-      .eq("id", "task-1")
-      .neq("status", "COMPLETED")
-      .select()
-      .maybeSingle();
-
-    expect(updated).toBeDefined();
-    expect(updated?.status).toBe("COMPLETED");
-    expect(updated?.completed_at).toBe(completedAt);
-  });
-
-  // 10. Task completion creates event
-  it("10. Task completion creates event", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-    });
-
-    await recordOnboardingEvent(db, {
-      onboardingId: "onb-1",
-      candidateId: testCandidate.id,
-      eventType: "ONBOARDING_TASK_COMPLETED",
-      notes: 'Task completed: "Verify identity documents"',
-    });
-
-    const events = db._state.onboarding_events;
-    expect(events.some((e: any) => e.event_type === "ONBOARDING_TASK_COMPLETED")).toBe(true);
-  });
-
-  // 11. Cannot complete onboarding with incomplete required tasks
-  it("11. Cannot complete onboarding with incomplete required tasks", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-      onboarding_tasks: [
-        { id: "task-1", onboarding_id: "onb-1", status: "COMPLETED" },
-        { id: "task-2", onboarding_id: "onb-1", status: "PENDING" },
-      ],
-    });
-
-    const { data: tasks } = await db
-      .from("onboarding_tasks")
-      .select("id, status")
-      .eq("onboarding_id", "onb-1");
-
-    const incomplete = tasks.filter((t: any) => t.status !== "COMPLETED");
-    expect(incomplete.length).toBe(1);
-
-    // Business rule prevents transition
-    const canComplete = incomplete.length === 0;
-    expect(canComplete).toBe(false);
-  });
-
-  // 12. Can complete onboarding when all required tasks are complete
-  it("12. Can complete onboarding when all required tasks are complete", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-      onboarding_tasks: [
-        { id: "task-1", onboarding_id: "onb-1", status: "COMPLETED" },
-        { id: "task-2", onboarding_id: "onb-1", status: "COMPLETED" },
-      ],
-    });
-
-    const { data: tasks } = await db
-      .from("onboarding_tasks")
-      .select("id, status")
-      .eq("onboarding_id", "onb-1");
-
-    const incomplete = tasks.filter((t: any) => t.status !== "COMPLETED");
-    expect(incomplete.length).toBe(0);
-
-    const completedAt = new Date().toISOString();
-    const { data: updated } = await db
-      .from("onboarding")
-      .update({ status: "COMPLETED", completed_at: completedAt })
-      .eq("id", "onb-1")
-      .eq("status", "IN_PROGRESS")
-      .select()
-      .maybeSingle();
-
-    expect(updated?.status).toBe("COMPLETED");
-    expect(updated?.completed_at).toBe(completedAt);
-  });
-
-  // 13. Completion creates audit event
-  it("13. Completion creates audit event", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "COMPLETED" }],
-    });
-
-    await recordOnboardingEvent(db, {
-      onboardingId: "onb-1",
-      candidateId: testCandidate.id,
-      eventType: "ONBOARDING_COMPLETED",
-      notes: "Onboarding successfully completed.",
-    });
-
-    const events = db._state.onboarding_events;
-    expect(events.some((e: any) => e.event_type === "ONBOARDING_COMPLETED")).toBe(true);
-  });
-
-  // 14. Cancel creates audit event
-  it("14. Cancel creates audit event", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-    });
-
-    const { data: updated } = await db
-      .from("onboarding")
-      .update({ status: "CANCELLED" })
-      .eq("id", "onb-1")
-      .in("status", ["NOT_STARTED", "IN_PROGRESS"])
-      .select()
-      .maybeSingle();
-
-    expect(updated?.status).toBe("CANCELLED");
-
-    await recordOnboardingEvent(db, {
-      onboardingId: "onb-1",
-      candidateId: testCandidate.id,
-      eventType: "ONBOARDING_CANCELLED",
-      notes: "Candidate delayed start.",
-    });
-
-    const events = db._state.onboarding_events;
-    expect(events.some((e: any) => e.event_type === "ONBOARDING_CANCELLED")).toBe(true);
-  });
-
-  // 15. Cancelled onboarding cannot be completed
-  it("15. Cancelled onboarding cannot be completed", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "CANCELLED" }],
-    });
-
-    const { data: updated } = await db
-      .from("onboarding")
-      .update({ status: "COMPLETED" })
-      .eq("id", "onb-1")
-      .eq("status", "IN_PROGRESS") // Must be IN_PROGRESS
-      .select()
-      .maybeSingle();
-
-    expect(updated).toBeNull();
-  });
-
-  // 16. Anonymous access blocked
-  it("16. Anonymous access blocked (RLS simulation)", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-      userRole: "anonymous",
-    });
-
-    const { data } = await db.from("onboarding").select("*");
-    expect(data).toHaveLength(0); // RLS blocks read
-  });
-
-  // 17. Non-staff authenticated user blocked
-  it("17. Non-staff authenticated user blocked", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-      userRole: "candidate",
-    });
-
-    const { data } = await db.from("onboarding").select("*");
-    expect(data).toHaveLength(0); // RLS blocks candidate
-  });
-
-  // 18. Recruiter access works
-  it("18. Recruiter access works", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-      userRole: "recruiter",
-    });
-
-    const { data } = await db.from("onboarding").select("*");
-    expect(data).toHaveLength(1);
-    expect(data[0].id).toBe("onb-1");
-  });
-
-  // 19. ATS score remains unchanged
-  it("19. ATS score remains unchanged throughout onboarding lifecycle", async () => {
-    const db = createMockDb({
-      candidates: [{ ...testCandidate, ats_score: 95 }],
-      offers: [testAcceptedOffer],
-    });
-
-    await createOnboardingAtomic(db, { candidateId: testCandidate.id });
-    const cand = db._state.candidates.find((c: any) => c.id === testCandidate.id);
-    expect(cand.ats_score).toBe(95);
-  });
-
-  // 20. Interview history remains unchanged
-  it("20. Interview history remains unchanged", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      offers: [testAcceptedOffer],
-      appointments: [completedInterview],
-    });
-
-    await createOnboardingAtomic(db, { candidateId: testCandidate.id });
-    const appts = db._state.appointments.filter((a: any) => a.candidate_id === testCandidate.id);
-    expect(appts).toHaveLength(1);
-    expect(appts[0].status).toBe("COMPLETED");
-  });
-
-  // 21. Offer history remains unchanged
-  it("21. Offer history remains unchanged", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      offers: [testAcceptedOffer],
-    });
-
-    await createOnboardingAtomic(db, { candidateId: testCandidate.id });
-    const candidateOffers = db._state.offers.filter(
-      (o: any) => o.candidate_id === testCandidate.id,
-    );
-    expect(candidateOffers).toHaveLength(1);
-    expect(candidateOffers[0].status).toBe("ACCEPTED");
-    expect(candidateOffers[0].compensation).toBe(1250000);
-  });
-
-  // 22. Candidate remains `hired` after onboarding completion
-  it("22. Candidate remains `hired` after onboarding completion", async () => {
-    const db = createMockDb({
-      candidates: [{ ...testCandidate, stage: "hired", application_status: "hired" }],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-    });
-
-    await db
-      .from("onboarding")
-      .update({ status: "COMPLETED", completed_at: new Date().toISOString() })
-      .eq("id", "onb-1")
-      .eq("status", "IN_PROGRESS");
-
-    const cand = db._state.candidates.find((c: any) => c.id === testCandidate.id);
-    expect(cand.stage).toBe("hired");
-    expect(cand.application_status).toBe("hired");
-  });
-
-  // 23. Concurrent onboarding creation (Partial uniqueness / single active onboarding)
-  it("23. Concurrent onboarding creation race condition creates exactly one active record", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      offers: [testAcceptedOffer],
-    });
-
-    const attempt1 = createOnboardingAtomic(db, { candidateId: testCandidate.id });
-    const attempt2 = createOnboardingAtomic(db, { candidateId: testCandidate.id });
-
-    const results = await Promise.allSettled([attempt1, attempt2]);
-    const fulfilled = results.filter((r) => r.status === "fulfilled");
-    const rejected = results.filter((r) => r.status === "rejected");
-
-    expect(fulfilled.length).toBe(1);
-    expect(rejected.length).toBe(1);
-    expect(db._state.onboarding).toHaveLength(1);
-  });
-
-  // 24. Concurrent start (only one transition succeeds)
-  it("24. Concurrent start produces exactly one successful transition", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "NOT_STARTED" }],
-    });
-
-    const startOp = () =>
-      db
-        .from("onboarding")
-        .update({ status: "IN_PROGRESS" })
-        .eq("id", "onb-1")
-        .eq("status", "NOT_STARTED")
-        .select()
-        .maybeSingle();
-
-    const [res1, res2] = await Promise.all([startOp(), startOp()]);
-    const successfulUpdates = [res1.data, res2.data].filter(Boolean);
-
-    expect(successfulUpdates.length).toBe(1);
-    expect(db._state.onboarding[0].status).toBe("IN_PROGRESS");
-  });
-
-  // 25. Concurrent completion produces exactly one transition & event
-  it("25. Concurrent completion produces exactly one transition & event", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-    });
-
-    const completeOp = async () => {
-      const now = new Date().toISOString();
-      const { data: updated } = await db
-        .from("onboarding")
-        .update({ status: "COMPLETED", completed_at: now })
-        .eq("id", "onb-1")
-        .eq("status", "IN_PROGRESS")
-        .select()
-        .maybeSingle();
-
-      if (updated) {
-        await recordOnboardingEvent(db, {
-          onboardingId: "onb-1",
-          candidateId: testCandidate.id,
-          eventType: "ONBOARDING_COMPLETED",
-          notes: "Completed.",
+      // Verify all 3 required documents
+      for (const doc of created.documents) {
+        await reviewOnboardingDocument(db, {
+          onboardingId: created.onboarding.id,
+          documentId: doc.id,
+          decision: "VERIFIED",
+          reviewerId: "staff-1",
         });
       }
-      return updated;
-    };
 
-    const [res1, res2] = await Promise.all([completeOp(), completeOp()]);
-    const successfulUpdates = [res1, res2].filter(Boolean);
+      const completed = await completeOnboardingAtomic(db, {
+        onboardingId: created.onboarding.id,
+        actorId: "staff-1",
+      });
 
-    expect(successfulUpdates.length).toBe(1);
-    expect(
-      db._state.onboarding_events.filter((e: any) => e.event_type === "ONBOARDING_COMPLETED"),
-    ).toHaveLength(1);
+      expect(completed.status).toBe("COMPLETED");
+      expect(completed.completed_at).toBeDefined();
+
+      const event = db._state.onboarding_events.find(
+        (e: any) => e.event_type === "ONBOARDING_COMPLETED",
+      );
+      expect(event).toBeDefined();
+    });
   });
 
-  // 26. Concurrent cancellation
-  it("26. Concurrent cancellation allows only one active cancellation", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
+  describe("7. Resend Invitation Token Rotation", () => {
+    it("resends invite, rotates token hash, and sets fresh 14-day expiration", async () => {
+      const db = createMockDb({
+        candidates: [candidateHired],
+        offers: [acceptedOffer],
+        jobs: [job1],
+      });
+
+      const created = await createOnboardingAtomic(db, { candidateId: "cand-hired-1" });
+      const oldToken = created.rawToken;
+
+      const resendRes = await resendOnboardingInviteAtomic(db, created.onboarding.id);
+      expect(resendRes.rawToken).not.toBe(oldToken);
+      expect(resendRes.rawToken).toHaveLength(64);
+
+      // Old token no longer resolves
+      await expect(resolveOnboardingToken(db, oldToken)).rejects.toThrow(
+        "Invalid or revoked onboarding invitation link.",
+      );
+
+      // New token resolves
+      const portal = await resolveOnboardingToken(db, resendRes.rawToken);
+      expect(portal.candidate.full_name).toBe("Alex Smith");
     });
-
-    const cancelOp = () =>
-      db
-        .from("onboarding")
-        .update({ status: "CANCELLED" })
-        .eq("id", "onb-1")
-        .in("status", ["NOT_STARTED", "IN_PROGRESS"])
-        .select()
-        .maybeSingle();
-
-    const [res1, res2] = await Promise.all([cancelOp(), cancelOp()]);
-    const successfulUpdates = [res1.data, res2.data].filter(Boolean);
-
-    expect(successfulUpdates.length).toBe(1);
-    expect(db._state.onboarding[0].status).toBe("CANCELLED");
-  });
-
-  // 27. Arbitrary task UUID cannot modify another onboarding
-  it("27. Arbitrary task UUID cannot modify another onboarding", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate, { ...testCandidate, id: "cand-other" }],
-      onboarding: [
-        { id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" },
-        { id: "onb-2", candidate_id: "cand-other", status: "IN_PROGRESS" },
-      ],
-      onboarding_tasks: [
-        { id: "task-belonging-to-onb2", onboarding_id: "onb-2", status: "PENDING" },
-      ],
-    });
-
-    // Verification check as in completeOnboardingTask
-    const { data: task } = await db
-      .from("onboarding_tasks")
-      .select("*, onboarding(id, candidate_id)")
-      .eq("id", "task-belonging-to-onb2")
-      .maybeSingle();
-
-    expect(task).toBeDefined();
-    // Validate mismatch with candidate 1's onboarding
-    const matchesOnb1 = task.onboarding_id === "onb-1";
-    expect(matchesOnb1).toBe(false);
-  });
-
-  // 28. Duplicate task completion is safe / idempotent
-  it("28. Duplicate task completion is safe / idempotent", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      onboarding: [{ id: "onb-1", candidate_id: testCandidate.id, status: "IN_PROGRESS" }],
-      onboarding_tasks: [
-        {
-          id: "task-1",
-          onboarding_id: "onb-1",
-          status: "COMPLETED",
-          completed_at: "2026-09-20T10:00:00Z",
-        },
-      ],
-    });
-
-    const { data: task } = await db
-      .from("onboarding_tasks")
-      .select("*")
-      .eq("id", "task-1")
-      .maybeSingle();
-
-    expect(task.status).toBe("COMPLETED");
-
-    // Idempotent guard: does not run update or insert duplicate events
-    const isAlreadyCompleted = task.status === "COMPLETED";
-    expect(isAlreadyCompleted).toBe(true);
-    expect(db._state.onboarding_events).toHaveLength(0);
-  });
-
-  // 29. Onboarding creation cannot leave partial records
-  it("29. Onboarding creation cannot leave partial records on task insertion failure", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      offers: [testAcceptedOffer],
-    });
-
-    // Disable RPC so it exercises the client-side atomic fallback with rollback
-    db.rpc = async () => ({ data: null, error: new Error("RPC not available") });
-
-    // Force failure on task insertion
-    const originalFrom = db.from;
-    db.from = (table: string) => {
-      const builder = originalFrom(table);
-      if (table === "onboarding_tasks") {
-        return {
-          ...builder,
-          insert: () => {
-            const errRes = { data: null, error: new Error("Simulated task DB write error") };
-            return {
-              select: () => ({
-                then: (resolve: any) => resolve(errRes),
-              }),
-            };
-          },
-        };
-      }
-      return builder;
-    };
-
-    await expect(createOnboardingAtomic(db, { candidateId: testCandidate.id })).rejects.toThrow(
-      /Simulated task DB write error/,
-    );
-
-    // Rollback guarantees zero orphaned onboarding records
-    expect(db._state.onboarding).toHaveLength(0);
-    expect(db._state.onboarding_tasks).toHaveLength(0);
-  });
-
-  // 30. Accepted offer start_date is correctly used
-  it("30. Accepted offer start_date is correctly used as default", async () => {
-    const db = createMockDb({
-      candidates: [testCandidate],
-      offers: [
-        {
-          id: "offer-prev",
-          candidate_id: testCandidate.id,
-          status: "ACCEPTED",
-          start_date: "2026-11-01",
-          created_at: "2026-09-21T00:00:00Z",
-        },
-      ],
-    });
-
-    const result = await createOnboardingAtomic(db, { candidateId: testCandidate.id });
-    expect(result.onboarding.start_date).toBe("2026-11-01");
   });
 });

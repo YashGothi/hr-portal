@@ -30,25 +30,60 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-function AuthPage() {
+export function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) navigate({ to: "/dashboard", replace: true });
+    });
+
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) navigate({ to: "/dashboard", replace: true });
     });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signup") {
+      if (mode === "forgot") {
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail) {
+          toast.error("Email address is required.");
+          setBusy(false);
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmedEmail)) {
+          toast.error("Enter a valid email address.");
+          setBusy(false);
+          return;
+        }
+
+        try {
+          await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+            redirectTo: `${window.location.origin}/reset-password`,
+          });
+        } catch {
+          // Swallow any backend error to prevent account enumeration
+        }
+
+        toast.success(
+          "If an account exists for this email address, a password reset link has been sent.",
+        );
+        setMode("signin");
+      } else if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -100,10 +135,16 @@ function AuthPage() {
       <div className="w-full max-w-sm panel p-7">
         <Brand />
         <h1 className="mt-2 text-2xl font-semibold">
-          {mode === "signin" ? "Sign in to your workspace" : "Create your HR account"}
+          {mode === "signin"
+            ? "Sign in to your workspace"
+            : mode === "signup"
+              ? "Create your HR account"
+              : "Reset your password"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Recruiter access only. Candidates never sign in here.
+          {mode === "forgot"
+            ? "Enter your work email address to receive a password reset link."
+            : "Recruiter access only. Candidates never sign in here."}
         </p>
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
@@ -119,7 +160,7 @@ function AuthPage() {
             </div>
           ) : null}
           <div className="space-y-2">
-            <Label htmlFor="email">Work email</Label>
+            <Label htmlFor="email">{mode === "forgot" ? "Email Address" : "Work email"}</Label>
             <Input
               id="email"
               type="email"
@@ -129,41 +170,75 @@ function AuthPage() {
               placeholder="you@company.com"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-          </div>
+          {mode !== "forgot" ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                {mode === "signin" ? (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-primary hover:underline"
+                    onClick={() => setMode("forgot")}
+                  >
+                    Forgot Password?
+                  </button>
+                ) : null}
+              </div>
+              <Input
+                id="password"
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+          ) : null}
           <Button type="submit" className="w-full" disabled={busy}>
-            {mode === "signin" ? "Sign in" : "Create account"}
+            {mode === "signin"
+              ? "Sign in"
+              : mode === "signup"
+                ? "Create account"
+                : "Send Reset Link"}
           </Button>
         </form>
 
-        <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
-        </div>
+        {mode !== "forgot" ? (
+          <>
+            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" /> or{" "}
+              <span className="h-px flex-1 bg-border" />
+            </div>
 
-        <Button variant="secondary" className="w-full" onClick={handleGoogle} disabled={busy}>
-          Continue with Google
-        </Button>
+            <Button variant="secondary" className="w-full" onClick={handleGoogle} disabled={busy}>
+              Continue with Google
+            </Button>
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          {mode === "signin" ? "New to the team? " : "Already have an account? "}
-          <button
-            type="button"
-            className="font-medium text-primary hover:underline"
-            onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-          >
-            {mode === "signin" ? "Create an account" : "Sign in"}
-          </button>
-        </p>
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              {mode === "signin" ? "New to the team? " : "Already have an account? "}
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+              >
+                {mode === "signin" ? "Create an account" : "Sign in"}
+              </button>
+            </p>
+          </>
+        ) : (
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Remember your password?{" "}
+            <button
+              type="button"
+              className="font-medium text-primary hover:underline"
+              onClick={() => setMode("signin")}
+            >
+              Back to sign in
+            </button>
+          </p>
+        )}
+
         <p className="mt-3 text-center text-xs text-muted-foreground">
           <Link to="/" className="hover:underline">
             Back to overview

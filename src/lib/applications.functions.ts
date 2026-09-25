@@ -27,7 +27,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 /** Public: the details shown on the candidate application page. */
 export const getPublicJob = createServerFn({ method: "GET" })
-  .inputValidator((input: unknown) => z.object({ code: z.string().min(1).max(64) }).parse(input))
+  .validator((input: unknown) => z.object({ code: z.string().min(1).max(64) }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const trimmed = data.code.trim();
@@ -56,7 +56,7 @@ export const getPublicJob = createServerFn({ method: "GET" })
 /** HR only: a short-lived link to open a candidate's stored resume. */
 export const getResumeLink = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ candidateId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ candidateId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: candidate, error } = await context.supabase
       .from("candidates")
@@ -77,7 +77,7 @@ export const getResumeLink = createServerFn({ method: "POST" })
 /** HR only: re-run the ATS against the current job requirements. */
 export const rerunAts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ candidateId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ candidateId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { evaluateResume, saveEvaluation, saveEvaluationFailure, JOB_REQUIREMENT_COLUMNS } =
       await import("@/lib/ats/engine.server");
@@ -144,7 +144,7 @@ export const rerunAts = createServerFn({ method: "POST" })
 /** HR only: previous ATS runs for a candidate. */
 export const getAtsHistory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ candidateId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ candidateId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: rows } = await context.supabase
       .from("ats_evaluations")
@@ -218,7 +218,7 @@ export const MAX_COMPARISON_CANDIDATES = 5;
 /** HR only: retrieves side-by-side ATS comparison data for candidates of the SAME job opening. */
 export const compareCandidates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         candidateIds: z

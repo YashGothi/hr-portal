@@ -23,6 +23,10 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Certificates and keys
+*.pem
+*.key
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

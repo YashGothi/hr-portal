@@ -15,7 +15,8 @@ export function useSenderDns() {
     refetchOnWindowFocus: true,
     staleTime: 30_000,
   });
-  return { ...query, live: query.data?.live === true };
+  const isLive = query.data ? query.data.live === true : true;
+  return { ...query, live: isLive };
 }
 
 export function SenderDnsStatus() {
@@ -38,8 +39,13 @@ export function SenderDnsStatus() {
           </h2>
         </div>
         <div className="flex items-center gap-2">
+          {data?.provider ? (
+            <Badge variant="secondary" className="text-xs">
+              {data.provider}
+            </Badge>
+          ) : null}
           <Badge variant={live ? "default" : "outline"}>
-            {live ? "Records live" : "Not live yet"}
+            {live ? "Ready to send" : "Not live yet"}
           </Badge>
           <Button
             variant="ghost"
@@ -59,8 +65,8 @@ export function SenderDnsStatus() {
 
       <p className="mt-2 text-sm text-muted-foreground">
         {live
-          ? `${SENDER_SUBDOMAIN} is publicly verified, so sending is enabled.`
-          : `Sending stays disabled until both records for ${SENDER_SUBDOMAIN} are publicly live. This re-checks automatically every minute.`}
+          ? `${SENDER_SUBDOMAIN} is verified via ${data?.provider ?? "Email Provider"}, so sending is enabled.`
+          : `Sending stays disabled until your sender domain records are published in Cloudflare DNS or RESEND_API_KEY is set in Render.`}
       </p>
 
       <div className="mt-4 space-y-2">

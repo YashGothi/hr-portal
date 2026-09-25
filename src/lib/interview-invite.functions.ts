@@ -10,7 +10,7 @@ import { INTERVIEW_ELIGIBLE_STATUSES, SHORTLIST_THRESHOLD } from "@/lib/ats/weig
  */
 export const previewInterviewInvitation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ candidateId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ candidateId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: candidate, error } = await context.supabase
       .from("candidates")

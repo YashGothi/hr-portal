@@ -18,7 +18,10 @@ export const Route = createFileRoute("/api/public/scheduling/invite")({
 
         const invite = await resolveInvite(supabaseAdmin, token);
         if (!invite.ok) {
-          return Response.json({ error: invite.reason }, { status: 404 });
+          return Response.json(
+            { error: invite.reason },
+            { status: 404, headers: { "Cache-Control": "no-store" } },
+          );
         }
 
         const { context } = invite;
@@ -26,7 +29,7 @@ export const Route = createFileRoute("/api/public/scheduling/invite")({
         if (!type || !type.active) {
           return Response.json(
             { error: "This appointment type is not available." },
-            { status: 404 },
+            { status: 404, headers: { "Cache-Control": "no-store" } },
           );
         }
 
@@ -42,27 +45,30 @@ export const Route = createFileRoute("/api/public/scheduling/invite")({
           .eq("status", "BOOKED")
           .maybeSingle();
 
-        return Response.json({
-          appointmentType: context.appointmentType,
-          title: type.title,
-          description: type.description,
-          durationMinutes: type.duration_minutes,
-          jobTitle: context.jobTitle,
-          candidate: {
-            fullName: context.candidate.full_name,
-            email: context.candidate.email,
-            phone: context.candidate.phone,
-            applicationCode: context.candidate.application_code,
+        return Response.json(
+          {
+            appointmentType: context.appointmentType,
+            title: type.title,
+            description: type.description,
+            durationMinutes: type.duration_minutes,
+            jobTitle: context.jobTitle,
+            candidate: {
+              fullName: context.candidate.full_name,
+              email: context.candidate.email,
+              phone: context.candidate.phone,
+              applicationCode: context.candidate.application_code,
+            },
+            scheduling: {
+              timezone: settings.timezone,
+              workingDays: settings.working_days,
+              allowReschedule: settings.allow_candidate_reschedule,
+              bookingHorizonDays: settings.booking_horizon_days,
+              interviewerName: settings.interviewer_name,
+            },
+            appointment: appointment ?? null,
           },
-          scheduling: {
-            timezone: settings.timezone,
-            workingDays: settings.working_days,
-            allowReschedule: settings.allow_candidate_reschedule,
-            bookingHorizonDays: settings.booking_horizon_days,
-            interviewerName: settings.interviewer_name,
-          },
-          appointment: appointment ?? null,
-        });
+          { headers: { "Cache-Control": "no-store" } },
+        );
       },
     },
   },

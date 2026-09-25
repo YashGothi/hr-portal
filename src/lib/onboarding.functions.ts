@@ -3,13 +3,24 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  completeOnboardingAtomic,
   createOnboardingAtomic,
   recordOnboardingEvent,
+  resendOnboardingInviteAtomic,
+  resolveOnboardingToken,
+  reviewOnboardingDocument,
+  uploadCandidateDocument,
   verifyOnboardingEligibility,
 } from "./onboarding/onboarding.server";
 
+export type OnboardingDocumentWithSignedUrl =
+  Database["public"]["Tables"]["onboarding_documents"]["Row"] & {
+    signedUrl?: string | null;
+  };
+
 /**
- * Loads onboarding record, default tasks, audit events, and eligibility details for a candidate.
+ * Loads onboarding record, document compliance items (with 15-minute signed URLs for staff),
+ * audit events, and eligibility details for a candidate.
  */
 export const getCandidateOnboarding = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -37,16 +48,35 @@ export const getCandidateOnboarding = createServerFn({ method: "GET" })
       (onboardingList ?? [])[0] ??
       null;
 
-    let tasks: Database["public"]["Tables"]["onboarding_tasks"]["Row"][] = [];
+    let documents: OnboardingDocumentWithSignedUrl[] = [];
     let events: Database["public"]["Tables"]["onboarding_events"]["Row"][] = [];
 
     if (currentOnboarding) {
-      const { data: tasksData } = await context.supabase
-        .from("onboarding_tasks")
+      const { data: docsData } = await context.supabase
+        .from("onboarding_documents")
         .select("*")
         .eq("onboarding_id", currentOnboarding.id)
         .order("created_at", { ascending: true });
-      tasks = tasksData ?? [];
+
+      const rawDocs = docsData ?? [];
+
+      // Generate 15-minute secure signed URLs for recruiter document viewing
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      documents = await Promise.all(
+        rawDocs.map(async (doc) => {
+          let signedUrl: string | null = null;
+          if (doc.storage_path) {
+            const { data: signedData } = await supabaseAdmin.storage
+              .from("onboarding-documents")
+              .createSignedUrl(doc.storage_path, 900); // 15 minutes
+            signedUrl = signedData?.signedUrl ?? null;
+          }
+          return {
+            ...doc,
+            signedUrl,
+          };
+        }),
+      );
 
       const { data: eventsData } = await context.supabase
         .from("onboarding_events")
@@ -60,25 +90,27 @@ export const getCandidateOnboarding = createServerFn({ method: "GET" })
       eligibility,
       onboarding: currentOnboarding,
       allOnboardings: onboardingList ?? [],
-      tasks,
+      documents,
       events,
     };
   });
 
 /**
- * Atomically creates onboarding record, 7 default tasks, and ONBOARDING_CREATED event.
- * Rejects non-hired candidates and candidates with existing active onboarding.
- * Preserves start date consistency from accepted offer if not provided.
+ * Atomically creates onboarding record, initial document compliance items,
+ * generates 256-bit token hash, dispatches onboarding invitation email,
+ * and records ONBOARDING_INVITE_SENT event upon confirmed email delivery (Option B).
  */
 export const createOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: { candidateId: string; startDate?: string | null }) =>
-    z
-      .object({
-        candidateId: z.string().uuid(),
-        startDate: z.string().nullable().optional(),
-      })
-      .parse(data),
+  .validator(
+    (data: { candidateId: string; startDate?: string | null; origin?: string | undefined }) =>
+      z
+        .object({
+          candidateId: z.string().uuid(),
+          startDate: z.string().nullable().optional(),
+          origin: z.string().optional(),
+        })
+        .parse(data),
   )
   .handler(async ({ data, context }) => {
     const result = await createOnboardingAtomic(context.supabase, {
@@ -87,134 +119,227 @@ export const createOnboarding = createServerFn({ method: "POST" })
       createdBy: context.userId ?? null,
     });
 
-    return result;
-  });
+    const origin = data.origin || (typeof window !== "undefined" ? window.location.origin : "");
+    const onboardingUrl = origin
+      ? `${origin}/onboarding/${result.rawToken}`
+      : `/onboarding/${result.rawToken}`;
 
-/**
- * Starts onboarding transition: NOT_STARTED → IN_PROGRESS.
- * Conditional update guarantees race-safety.
- */
-export const startOnboarding = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((data: { onboardingId: string }) =>
-    z.object({ onboardingId: z.string().uuid() }).parse(data),
-  )
-  .handler(async ({ data, context }) => {
-    // 1. Race-safe conditional update
-    const { data: updated, error } = await context.supabase
-      .from("onboarding")
-      .update({ status: "IN_PROGRESS" })
-      .eq("id", data.onboardingId)
-      .eq("status", "NOT_STARTED")
-      .select()
-      .maybeSingle();
+    // Look up candidate email and job info for email dispatch
+    const { data: candidate } = await context.supabase
+      .from("candidates")
+      .select("full_name, email, job_id, jobs(title)")
+      .eq("id", data.candidateId)
+      .single();
 
-    if (error) throw new Error("Could not start onboarding.");
-    if (!updated) {
-      throw new Error(
-        "Cannot start onboarding: record is not in NOT_STARTED status or transition conflict.",
-      );
+    let emailSent = false;
+    let emailError: string | undefined;
+
+    if (candidate?.email) {
+      try {
+        const { sendTemplateEmail } = await import("@/lib/email-templates/send-email");
+        const jobTitle = (candidate.jobs as unknown as { title: string })?.title || "your new role";
+
+        const emailResult = await sendTemplateEmail("onboarding-invitation", candidate.email, {
+          templateData: {
+            candidateName: candidate.full_name,
+            jobTitle,
+            startDate: result.onboarding.start_date,
+            onboardingUrl,
+          },
+          idempotencyKey: `onboarding-${result.onboarding.id}-${result.rawToken.slice(0, 16)}`,
+        });
+
+        emailSent = emailResult.sent;
+
+        // Option B Audit Semantics: record ONBOARDING_INVITE_SENT only upon confirmed delivery
+        if (emailSent) {
+          await recordOnboardingEvent(context.supabase, {
+            onboardingId: result.onboarding.id,
+            candidateId: data.candidateId,
+            eventType: "ONBOARDING_INVITE_SENT",
+            notes: `Initial onboarding invitation email delivered to ${candidate.email}.`,
+            createdBy: context.userId ?? null,
+          });
+        }
+      } catch (err: unknown) {
+        console.error("Onboarding invitation email dispatch failed:", err);
+        emailError = err instanceof Error ? err.message : "Email dispatch failed";
+      }
     }
 
-    // 2. Audit Event
-    await recordOnboardingEvent(context.supabase, {
-      onboardingId: updated.id,
-      candidateId: updated.candidate_id,
-      eventType: "ONBOARDING_STARTED",
-      notes: "Onboarding initiated and transitioned to IN_PROGRESS.",
-      createdBy: context.userId ?? null,
-    });
-
-    return { onboarding: updated };
+    return {
+      ...result,
+      onboardingUrl,
+      emailSent,
+      emailError,
+    };
   });
 
 /**
- * Completes an onboarding task with strict task ownership validation.
- * Idempotent: already-completed tasks do not create duplicate events.
+ * Resends onboarding invitation with new 256-bit token (invalidating prior token),
+ * dispatches email, and records ONBOARDING_INVITE_SENT upon confirmed delivery (Option B).
  */
-export const completeOnboardingTask = createServerFn({ method: "POST" })
+export const resendOnboardingInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: { taskId: string; onboardingId?: string; candidateId?: string }) =>
+  .validator((data: { onboardingId: string; origin?: string | undefined }) =>
     z
       .object({
-        taskId: z.string().uuid(),
-        onboardingId: z.string().uuid().optional(),
-        candidateId: z.string().uuid().optional(),
+        onboardingId: z.string().uuid(),
+        origin: z.string().optional(),
       })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    // 1. Ownership & existence check
-    const { data: task, error: taskError } = await context.supabase
-      .from("onboarding_tasks")
-      .select("*, onboarding(id, candidate_id, status)")
-      .eq("id", data.taskId)
-      .maybeSingle();
+    const result = await resendOnboardingInviteAtomic(context.supabase, data.onboardingId);
 
-    if (taskError || !task) {
-      throw new Error("Onboarding task not found.");
+    const origin = data.origin || (typeof window !== "undefined" ? window.location.origin : "");
+    const onboardingUrl = origin
+      ? `${origin}/onboarding/${result.rawToken}`
+      : `/onboarding/${result.rawToken}`;
+
+    const { data: candidate } = await context.supabase
+      .from("candidates")
+      .select("full_name, email, job_id, jobs(title)")
+      .eq("id", result.candidateId)
+      .single();
+
+    let emailSent = false;
+    let emailError: string | undefined;
+
+    if (candidate?.email) {
+      try {
+        const { sendTemplateEmail } = await import("@/lib/email-templates/send-email");
+        const jobTitle = (candidate.jobs as unknown as { title: string })?.title || "your new role";
+
+        const emailResult = await sendTemplateEmail("onboarding-invitation", candidate.email, {
+          templateData: {
+            candidateName: candidate.full_name,
+            jobTitle,
+            onboardingUrl,
+          },
+          idempotencyKey: `onboarding-resend-${data.onboardingId}-${result.rawToken.slice(0, 16)}`,
+        });
+
+        emailSent = emailResult.sent;
+
+        // Option B Audit Semantics: record ONBOARDING_INVITE_SENT only upon confirmed delivery
+        if (emailSent) {
+          await recordOnboardingEvent(context.supabase, {
+            onboardingId: data.onboardingId,
+            candidateId: result.candidateId,
+            eventType: "ONBOARDING_INVITE_SENT",
+            notes: `Replacement onboarding invitation email delivered to ${candidate.email}.`,
+            createdBy: context.userId ?? null,
+          });
+        }
+      } catch (err: unknown) {
+        console.error("Resend onboarding invitation email dispatch failed:", err);
+        emailError = err instanceof Error ? err.message : "Email dispatch failed";
+      }
     }
 
-    const taskWithOnboarding = task as unknown as {
-      id: string;
-      onboarding_id: string;
-      status: string;
-      onboarding?: { id: string; candidate_id: string; status: string } | null;
+    return {
+      success: true,
+      rawToken: result.rawToken,
+      onboardingUrl,
+      emailSent,
+      emailError,
     };
-
-    if (data.onboardingId && taskWithOnboarding.onboarding_id !== data.onboardingId) {
-      throw new Error("Task does not belong to the specified onboarding record.");
-    }
-
-    if (
-      data.candidateId &&
-      taskWithOnboarding.onboarding &&
-      taskWithOnboarding.onboarding.candidate_id !== data.candidateId
-    ) {
-      throw new Error("Task does not belong to the specified candidate.");
-    }
-
-    // 2. Idempotent check
-    if (task.status === "COMPLETED") {
-      return { task, alreadyCompleted: true };
-    }
-
-    const completedAt = new Date().toISOString();
-
-    // 3. Conditional update
-    const { data: updatedTask, error: updateError } = await context.supabase
-      .from("onboarding_tasks")
-      .update({
-        status: "COMPLETED",
-        completed_at: completedAt,
-      })
-      .eq("id", data.taskId)
-      .neq("status", "COMPLETED")
-      .select()
-      .maybeSingle();
-
-    if (updateError || !updatedTask) {
-      // Handled concurrently by another request
-      return { task, alreadyCompleted: true };
-    }
-
-    // 4. Audit Event
-    await recordOnboardingEvent(context.supabase, {
-      onboardingId: task.onboarding_id,
-      candidateId: taskWithOnboarding.onboarding?.candidate_id ?? "",
-      eventType: "ONBOARDING_TASK_COMPLETED",
-      notes: `Task completed: "${task.title}"`,
-      createdBy: context.userId ?? null,
-    });
-
-    return { task: updatedTask, alreadyCompleted: false };
   });
 
 /**
- * Completes onboarding lifecycle: IN_PROGRESS → COMPLETED.
- * Strictly verifies that all required tasks are COMPLETED.
- * Race-safe conditional transition ensures exactly one completion event.
- * Preserves candidate application_status = 'hired'.
+ * Candidate Portal: Resolves incoming candidate token into minimized portal display payload.
+ * Publicly callable without staff authentication.
+ */
+export const getOnboardingPortalData = createServerFn({ method: "GET" })
+  .validator((data: { token: string }) => {
+    return z.object({ token: z.string().min(1) }).parse(data);
+  })
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const portalData = await resolveOnboardingToken(supabaseAdmin, data.token);
+    return portalData;
+  });
+
+/**
+ * Candidate Portal: Uploads candidate compliance document.
+ * Authenticated by bearer candidate token, validated with magic bytes and 8 MB limit.
+ */
+export const uploadCandidateDocumentAction = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      token: string;
+      documentId: string;
+      fileName: string;
+      mimeType: string;
+      fileBase64: string;
+    }) =>
+      z
+        .object({
+          token: z.string().min(1),
+          documentId: z.string().uuid(),
+          fileName: z.string().min(1),
+          mimeType: z.string().min(1),
+          fileBase64: z.string().min(1),
+        })
+        .parse(data),
+  )
+  .handler(async ({ data }) => {
+    const fileBuffer = Buffer.from(data.fileBase64, "base64");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const result = await uploadCandidateDocument(supabaseAdmin, {
+      token: data.token,
+      documentId: data.documentId,
+      fileBuffer,
+      fileName: data.fileName,
+      mimeType: data.mimeType,
+    });
+
+    return result;
+  });
+
+/**
+ * Staff Action: Reviews an uploaded onboarding document.
+ * Decision: 'VERIFIED' or 'REJECTED' (rejection requires non-empty reviewNotes).
+ */
+export const reviewOnboardingDocumentAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (data: {
+      onboardingId: string;
+      documentId: string;
+      decision: "VERIFIED" | "REJECTED";
+      reviewNotes?: string | null;
+    }) =>
+      z
+        .object({
+          onboardingId: z.string().uuid(),
+          documentId: z.string().uuid(),
+          decision: z.enum(["VERIFIED", "REJECTED"]),
+          reviewNotes: z.string().nullable().optional(),
+        })
+        .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    if (!context.userId) {
+      throw new Error("Unauthorized: reviewer identification required.");
+    }
+
+    const updatedDoc = await reviewOnboardingDocument(context.supabase, {
+      onboardingId: data.onboardingId,
+      documentId: data.documentId,
+      decision: data.decision,
+      reviewNotes: data.reviewNotes ?? null,
+      reviewerId: context.userId,
+    });
+
+    return { success: true, document: updatedDoc };
+  });
+
+/**
+ * Staff Action: Server-Side Completion Gate.
+ * Verifies all required documents are VERIFIED, then transitions IN_PROGRESS -> COMPLETED.
  */
 export const completeOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -222,57 +347,16 @@ export const completeOnboarding = createServerFn({ method: "POST" })
     z.object({ onboardingId: z.string().uuid() }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    // 1. Verify all required tasks are COMPLETED
-    const { data: tasks, error: tasksError } = await context.supabase
-      .from("onboarding_tasks")
-      .select("id, status, title")
-      .eq("onboarding_id", data.onboardingId);
-
-    if (tasksError) throw new Error("Could not verify onboarding tasks.");
-
-    const incompleteTasks = (tasks ?? []).filter((t) => t.status !== "COMPLETED");
-    if (incompleteTasks.length > 0) {
-      throw new Error(
-        `Cannot complete onboarding: ${incompleteTasks.length} task(s) remain incomplete.`,
-      );
-    }
-
-    const completedAt = new Date().toISOString();
-
-    // 2. Race-safe conditional transition IN_PROGRESS → COMPLETED
-    const { data: updated, error: updateError } = await context.supabase
-      .from("onboarding")
-      .update({
-        status: "COMPLETED",
-        completed_at: completedAt,
-      })
-      .eq("id", data.onboardingId)
-      .eq("status", "IN_PROGRESS")
-      .select()
-      .maybeSingle();
-
-    if (updateError) throw new Error("Could not complete onboarding.");
-    if (!updated) {
-      throw new Error(
-        "Cannot complete onboarding: record is not currently IN_PROGRESS or was already completed.",
-      );
-    }
-
-    // 3. Exactly one ONBOARDING_COMPLETED audit event
-    await recordOnboardingEvent(context.supabase, {
-      onboardingId: updated.id,
-      candidateId: updated.candidate_id,
-      eventType: "ONBOARDING_COMPLETED",
-      notes: `Onboarding completed successfully with all tasks finished on ${completedAt}.`,
-      createdBy: context.userId ?? null,
+    const completed = await completeOnboardingAtomic(context.supabase, {
+      onboardingId: data.onboardingId,
+      actorId: context.userId ?? null,
     });
 
-    return { onboarding: updated };
+    return { onboarding: completed };
   });
 
 /**
- * Cancels an active onboarding record (NOT_STARTED or IN_PROGRESS).
- * Race-safe conditional update.
+ * Staff Action: Cancels an active onboarding record.
  */
 export const cancelOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -285,10 +369,12 @@ export const cancelOnboarding = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    // 1. Conditional update: only active onboarding can be cancelled
     const { data: updated, error } = await context.supabase
       .from("onboarding")
-      .update({ status: "CANCELLED" })
+      .update({
+        status: "CANCELLED",
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", data.onboardingId)
       .in("status", ["NOT_STARTED", "IN_PROGRESS"])
       .select()
@@ -299,7 +385,6 @@ export const cancelOnboarding = createServerFn({ method: "POST" })
       throw new Error("Cannot cancel onboarding: record is not currently active.");
     }
 
-    // 2. Audit Event
     await recordOnboardingEvent(context.supabase, {
       onboardingId: updated.id,
       candidateId: updated.candidate_id,

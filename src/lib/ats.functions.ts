@@ -105,7 +105,7 @@ function toStringList(value: unknown, max: number): string[] {
 /** Runs an ATS match on a candidate's resume against the linked job opening. */
 export const scoreCandidate = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => ScoreInput.parse(input))
+  .validator((input: unknown) => ScoreInput.parse(input))
   .handler(async ({ data, context }) => {
     const { data: candidate, error } = await context.supabase
       .from("candidates")

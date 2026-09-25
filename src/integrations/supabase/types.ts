@@ -1,10 +1,35 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5";
+  };
+  graphql_public: {
+    Tables: {
+      [_ in never]: never;
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json;
+          operationName?: string;
+          query?: string;
+          variables?: Json;
+        };
+        Returns: Json;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
   };
   public: {
     Tables: {
@@ -608,6 +633,296 @@ export type Database = {
         };
         Relationships: [];
       };
+      offer_events: {
+        Row: {
+          candidate_id: string;
+          created_at: string;
+          created_by: string | null;
+          event_type: string;
+          id: string;
+          notes: string | null;
+          offer_id: string;
+        };
+        Insert: {
+          candidate_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          event_type: string;
+          id?: string;
+          notes?: string | null;
+          offer_id: string;
+        };
+        Update: {
+          candidate_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          event_type?: string;
+          id?: string;
+          notes?: string | null;
+          offer_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "offer_events_candidate_id_fkey";
+            columns: ["candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "offer_events_offer_id_fkey";
+            columns: ["offer_id"];
+            isOneToOne: false;
+            referencedRelation: "offers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      offers: {
+        Row: {
+          accepted_at: string | null;
+          candidate_id: string;
+          compensation: number;
+          created_at: string;
+          created_by: string | null;
+          currency: string;
+          declined_at: string | null;
+          expires_at: string;
+          id: string;
+          job_id: string | null;
+          notes: string | null;
+          secure_token: string;
+          sent_at: string | null;
+          start_date: string;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          candidate_id: string;
+          compensation: number;
+          created_at?: string;
+          created_by?: string | null;
+          currency?: string;
+          declined_at?: string | null;
+          expires_at: string;
+          id?: string;
+          job_id?: string | null;
+          notes?: string | null;
+          secure_token?: string;
+          sent_at?: string | null;
+          start_date: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          candidate_id?: string;
+          compensation?: number;
+          created_at?: string;
+          created_by?: string | null;
+          currency?: string;
+          declined_at?: string | null;
+          expires_at?: string;
+          id?: string;
+          job_id?: string | null;
+          notes?: string | null;
+          secure_token?: string;
+          sent_at?: string | null;
+          start_date?: string;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "offers_candidate_id_fkey";
+            columns: ["candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "offers_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "jobs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      onboarding: {
+        Row: {
+          candidate_id: string;
+          candidate_token_hash: string | null;
+          completed_at: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          job_id: string | null;
+          start_date: string | null;
+          status: string;
+          token_expires_at: string | null;
+          token_revoked_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          candidate_id: string;
+          candidate_token_hash?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          job_id?: string | null;
+          start_date?: string | null;
+          status?: string;
+          token_expires_at?: string | null;
+          token_revoked_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          candidate_id?: string;
+          candidate_token_hash?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          job_id?: string | null;
+          start_date?: string | null;
+          status?: string;
+          token_expires_at?: string | null;
+          token_revoked_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_candidate_id_fkey";
+            columns: ["candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "onboarding_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "jobs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      onboarding_documents: {
+        Row: {
+          created_at: string;
+          description: string | null;
+          document_name: string | null;
+          document_status: string;
+          file_size_bytes: number | null;
+          id: string;
+          is_required: boolean;
+          mime_type: string | null;
+          onboarding_id: string;
+          requirement_key: string;
+          review_notes: string | null;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          storage_path: string | null;
+          title: string;
+          updated_at: string;
+          uploaded_at: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          description?: string | null;
+          document_name?: string | null;
+          document_status?: string;
+          file_size_bytes?: number | null;
+          id?: string;
+          is_required?: boolean;
+          mime_type?: string | null;
+          onboarding_id: string;
+          requirement_key: string;
+          review_notes?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          storage_path?: string | null;
+          title: string;
+          updated_at?: string;
+          uploaded_at?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          description?: string | null;
+          document_name?: string | null;
+          document_status?: string;
+          file_size_bytes?: number | null;
+          id?: string;
+          is_required?: boolean;
+          mime_type?: string | null;
+          onboarding_id?: string;
+          requirement_key?: string;
+          review_notes?: string | null;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          storage_path?: string | null;
+          title?: string;
+          updated_at?: string;
+          uploaded_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_documents_onboarding_id_fkey";
+            columns: ["onboarding_id"];
+            isOneToOne: false;
+            referencedRelation: "onboarding";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      onboarding_events: {
+        Row: {
+          candidate_id: string;
+          created_at: string;
+          created_by: string | null;
+          event_type: string;
+          id: string;
+          notes: string | null;
+          onboarding_id: string;
+        };
+        Insert: {
+          candidate_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          event_type: string;
+          id?: string;
+          notes?: string | null;
+          onboarding_id: string;
+        };
+        Update: {
+          candidate_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          event_type?: string;
+          id?: string;
+          notes?: string | null;
+          onboarding_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_events_candidate_id_fkey";
+            columns: ["candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "onboarding_events_onboarding_id_fkey";
+            columns: ["onboarding_id"];
+            isOneToOne: false;
+            referencedRelation: "onboarding";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           created_at: string;
@@ -784,309 +1099,20 @@ export type Database = {
         };
         Relationships: [];
       };
-      offers: {
-        Row: {
-          accepted_at: string | null;
-          candidate_id: string;
-          compensation: number;
-          created_at: string;
-          created_by: string | null;
-          currency: string;
-          declined_at: string | null;
-          expires_at: string;
-          id: string;
-          job_id: string | null;
-          notes: string | null;
-          secure_token: string;
-          sent_at: string | null;
-          start_date: string;
-          status: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REVOKED";
-          updated_at: string;
-        };
-        Insert: {
-          accepted_at?: string | null;
-          candidate_id: string;
-          compensation: number;
-          created_at?: string;
-          created_by?: string | null;
-          currency?: string;
-          declined_at?: string | null;
-          expires_at: string;
-          id?: string;
-          job_id?: string | null;
-          notes?: string | null;
-          secure_token?: string;
-          sent_at?: string | null;
-          start_date: string;
-          status?: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REVOKED";
-          updated_at?: string;
-        };
-        Update: {
-          accepted_at?: string | null;
-          candidate_id?: string;
-          compensation?: number;
-          created_at?: string;
-          created_by?: string | null;
-          currency?: string;
-          declined_at?: string | null;
-          expires_at?: string;
-          id?: string;
-          job_id?: string | null;
-          notes?: string | null;
-          secure_token?: string;
-          sent_at?: string | null;
-          start_date?: string;
-          status?: "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED" | "EXPIRED" | "REVOKED";
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "offers_candidate_id_fkey";
-            columns: ["candidate_id"];
-            isOneToOne: false;
-            referencedRelation: "candidates";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "offers_job_id_fkey";
-            columns: ["job_id"];
-            isOneToOne: false;
-            referencedRelation: "jobs";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      offer_events: {
-        Row: {
-          candidate_id: string;
-          created_at: string;
-          created_by: string | null;
-          event_type:
-            | "OFFER_CREATED"
-            | "OFFER_SENT"
-            | "OFFER_ACCEPTED"
-            | "OFFER_DECLINED"
-            | "OFFER_EXPIRED"
-            | "OFFER_REVOKED";
-          id: string;
-          notes: string | null;
-          offer_id: string;
-        };
-        Insert: {
-          candidate_id: string;
-          created_at?: string;
-          created_by?: string | null;
-          event_type:
-            | "OFFER_CREATED"
-            | "OFFER_SENT"
-            | "OFFER_ACCEPTED"
-            | "OFFER_DECLINED"
-            | "OFFER_EXPIRED"
-            | "OFFER_REVOKED";
-          id?: string;
-          notes?: string | null;
-          offer_id: string;
-        };
-        Update: {
-          candidate_id?: string;
-          created_at?: string;
-          created_by?: string | null;
-          event_type?:
-            | "OFFER_CREATED"
-            | "OFFER_SENT"
-            | "OFFER_ACCEPTED"
-            | "OFFER_DECLINED"
-            | "OFFER_EXPIRED"
-            | "OFFER_REVOKED";
-          id?: string;
-          notes?: string | null;
-          offer_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "offer_events_candidate_id_fkey";
-            columns: ["candidate_id"];
-            isOneToOne: false;
-            referencedRelation: "candidates";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "offer_events_offer_id_fkey";
-            columns: ["offer_id"];
-            isOneToOne: false;
-            referencedRelation: "offers";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      onboarding: {
-        Row: {
-          candidate_id: string;
-          completed_at: string | null;
-          created_at: string;
-          created_by: string | null;
-          id: string;
-          job_id: string | null;
-          start_date: string | null;
-          status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-          updated_at: string;
-        };
-        Insert: {
-          candidate_id: string;
-          completed_at?: string | null;
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          job_id?: string | null;
-          start_date?: string | null;
-          status?: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-          updated_at?: string;
-        };
-        Update: {
-          candidate_id?: string;
-          completed_at?: string | null;
-          created_at?: string;
-          created_by?: string | null;
-          id?: string;
-          job_id?: string | null;
-          start_date?: string | null;
-          status?: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "onboarding_candidate_id_fkey";
-            columns: ["candidate_id"];
-            isOneToOne: false;
-            referencedRelation: "candidates";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "onboarding_job_id_fkey";
-            columns: ["job_id"];
-            isOneToOne: false;
-            referencedRelation: "jobs";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      onboarding_tasks: {
-        Row: {
-          completed_at: string | null;
-          created_at: string;
-          description: string | null;
-          due_date: string | null;
-          id: string;
-          onboarding_id: string;
-          status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-          title: string;
-          updated_at: string;
-        };
-        Insert: {
-          completed_at?: string | null;
-          created_at?: string;
-          description?: string | null;
-          due_date?: string | null;
-          id?: string;
-          onboarding_id: string;
-          status?: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-          title: string;
-          updated_at?: string;
-        };
-        Update: {
-          completed_at?: string | null;
-          created_at?: string;
-          description?: string | null;
-          due_date?: string | null;
-          id?: string;
-          onboarding_id?: string;
-          status?: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
-          title?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "onboarding_tasks_onboarding_id_fkey";
-            columns: ["onboarding_id"];
-            isOneToOne: false;
-            referencedRelation: "onboarding";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      onboarding_events: {
-        Row: {
-          candidate_id: string;
-          created_at: string;
-          created_by: string | null;
-          event_type:
-            | "ONBOARDING_CREATED"
-            | "ONBOARDING_STARTED"
-            | "ONBOARDING_TASK_COMPLETED"
-            | "ONBOARDING_COMPLETED"
-            | "ONBOARDING_CANCELLED";
-          id: string;
-          notes: string | null;
-          onboarding_id: string;
-        };
-        Insert: {
-          candidate_id: string;
-          created_at?: string;
-          created_by?: string | null;
-          event_type:
-            | "ONBOARDING_CREATED"
-            | "ONBOARDING_STARTED"
-            | "ONBOARDING_TASK_COMPLETED"
-            | "ONBOARDING_COMPLETED"
-            | "ONBOARDING_CANCELLED";
-          id?: string;
-          notes?: string | null;
-          onboarding_id: string;
-        };
-        Update: {
-          candidate_id?: string;
-          created_at?: string;
-          created_by?: string | null;
-          event_type?:
-            | "ONBOARDING_CREATED"
-            | "ONBOARDING_STARTED"
-            | "ONBOARDING_TASK_COMPLETED"
-            | "ONBOARDING_COMPLETED"
-            | "ONBOARDING_CANCELLED";
-          id?: string;
-          notes?: string | null;
-          onboarding_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "onboarding_events_candidate_id_fkey";
-            columns: ["candidate_id"];
-            isOneToOne: false;
-            referencedRelation: "candidates";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "onboarding_events_onboarding_id_fkey";
-            columns: ["onboarding_id"];
-            isOneToOne: false;
-            referencedRelation: "onboarding";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
       create_onboarding_atomic: {
-        Args: {
-          p_candidate_id: string;
-          p_start_date?: string | null;
-          p_created_by?: string | null;
-        };
+        Args: { p_candidate_id: string; p_start_date?: string };
         Returns: Json;
       };
+      resend_onboarding_invite_atomic: {
+        Args: { p_onboarding_id: string };
+        Returns: Json;
+      };
+      resolve_onboarding_token: { Args: { p_token: string }; Returns: Json };
     };
     Enums: {
       app_role: "admin" | "recruiter";
@@ -1209,6 +1235,9 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "recruiter"],

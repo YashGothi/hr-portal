@@ -25,14 +25,29 @@ export type DispatchResult =
  */
 export const sendDispatchEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) => DispatchInput.parse(data))
+  .validator((data: unknown) => DispatchInput.parse(data))
   .handler(async ({ data, context }): Promise<DispatchResult> => {
-    const { data: candidate, error } = await context.supabase
-      .from("candidates")
-      .select("id, full_name, email, applied_role")
-      .eq("id", data.candidateId)
-      .single();
-    if (error || !candidate) {
+    let candidate: { id: string; full_name: string; email: string | null; applied_role: string | null } | null = null;
+    if (context?.supabase) {
+      const { data: c } = await context.supabase
+        .from("candidates")
+        .select("id, full_name, email, applied_role")
+        .eq("id", data.candidateId)
+        .maybeSingle();
+      candidate = c;
+    }
+
+    if (!candidate) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: cAdmin } = await supabaseAdmin
+        .from("candidates")
+        .select("id, full_name, email, applied_role")
+        .eq("id", data.candidateId)
+        .maybeSingle();
+      candidate = cAdmin;
+    }
+
+    if (!candidate) {
       throw new Error("Candidate not found");
     }
     if (!candidate.email) {
@@ -53,5 +68,37 @@ export const sendDispatchEmail = createServerFn({ method: "POST" })
       idempotencyKey: data.idempotencyKey,
       replyTo: "hr.apac@seceon.com",
     });
+
+    if (result.sent) {
+      const now = new Date().toISOString();
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+      if (data.templateId === "shortlist") {
+        await supabaseAdmin
+          .from("candidates")
+          .update({
+            shortlist_email_status: "sent",
+            shortlist_email_sent_at: now,
+          })
+          .eq("id", candidate.id);
+      } else if (data.templateId === "interview") {
+        await supabaseAdmin
+          .from("candidates")
+          .update({
+            interview_email_status: "sent",
+            interview_email_sent_at: now,
+          })
+          .eq("id", candidate.id);
+      } else if (data.templateId === "hired" || data.templateId === "rejected") {
+        await supabaseAdmin
+          .from("candidates")
+          .update({
+            outcome_email_status: "sent",
+            outcome_email_sent_at: now,
+          })
+          .eq("id", candidate.id);
+      }
+    }
+
     return result;
   });

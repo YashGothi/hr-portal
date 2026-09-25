@@ -14,7 +14,7 @@ const TypeEnum = z.enum(["SCREENING", "INTERVIEW"]);
 /** Creates (or returns) the secure scheduling link for a candidate + type. */
 export const ensureSchedulingInvite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
+  .validator((data: unknown) =>
     z
       .object({
         candidateId: z.string().uuid(),
@@ -105,7 +105,7 @@ export const ensureSchedulingInvite = createServerFn({ method: "POST" })
 /** Slots HR can pick from when booking or moving an appointment. */
 export const hrAvailability = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
+  .validator((data: unknown) =>
     z
       .object({
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -146,7 +146,7 @@ export type BookResult =
 /** HR books or moves an appointment on the candidate's behalf. */
 export const hrBookAppointment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
+  .validator((data: unknown) =>
     z
       .object({
         candidateId: z.string().uuid(),
@@ -323,7 +323,7 @@ export const hrBookAppointment = createServerFn({ method: "POST" })
 /** Cancels an appointment, keeping the record and releasing the slot. */
 export const hrCancelAppointment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
+  .validator((data: unknown) =>
     z
       .object({
         appointmentId: z.string().uuid(),
@@ -399,7 +399,7 @@ export const hrCancelAppointment = createServerFn({ method: "POST" })
 /** Marks an active booked appointment as completed by the recruiter. */
 export const hrCompleteAppointment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
+  .validator((data: unknown) =>
     z
       .object({
         appointmentId: z.string().uuid(),
@@ -443,7 +443,7 @@ export const hrCompleteAppointment = createServerFn({ method: "POST" })
 /** Prepares and dispatches an interview invitation email to a shortlisted candidate. */
 export const sendInterviewInvitation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) =>
+  .validator((data: unknown) =>
     z
       .object({
         candidateId: z.string().uuid(),
@@ -551,7 +551,7 @@ export const sendInterviewInvitation = createServerFn({ method: "POST" })
 /** Re-sends the confirmation email for a booked appointment. */
 export const hrResendSchedulingEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data) => z.object({ appointmentId: z.string().uuid() }).parse(data))
+  .validator((data: unknown) => z.object({ appointmentId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { data: appointment, error } = await context.supabase
       .from("appointments")

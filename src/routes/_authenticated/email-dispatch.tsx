@@ -96,7 +96,7 @@ export const TEMPLATES: EmailTemplate[] = [
     shortLabel: "Shortlist",
     description:
       "Congratulate shortlisted candidates and invite them to an initial screening call.",
-    eligibleStages: ["shortlisted"],
+    eligibleStages: ["application", "screening", "shortlisted"],
     needsSchedule: true,
   },
   {
@@ -104,7 +104,7 @@ export const TEMPLATES: EmailTemplate[] = [
     label: "Interview invite",
     shortLabel: "Interview",
     description: "Share the confirmed interview schedule and meeting details.",
-    eligibleStages: ["shortlisted", "interview"],
+    eligibleStages: ["application", "screening", "shortlisted", "interview"],
     needsSchedule: true,
   },
   {
@@ -112,7 +112,15 @@ export const TEMPLATES: EmailTemplate[] = [
     label: "Status update — accepted",
     shortLabel: "Accepted",
     description: "Congratulate a successful candidate and explain the next steps.",
-    eligibleStages: ["hired"],
+    eligibleStages: [
+      "application",
+      "screening",
+      "shortlisted",
+      "doc_verification",
+      "interview",
+      "offer",
+      "hired",
+    ],
     needsSchedule: false,
   },
   {
@@ -120,7 +128,15 @@ export const TEMPLATES: EmailTemplate[] = [
     label: "Status update — not selected",
     shortLabel: "Not selected",
     description: "Thank a candidate and share a considerate final update.",
-    eligibleStages: ["rejected"],
+    eligibleStages: [
+      "application",
+      "screening",
+      "shortlisted",
+      "doc_verification",
+      "interview",
+      "offer",
+      "rejected",
+    ],
     needsSchedule: false,
   },
 ];
@@ -512,12 +528,8 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
         }
       } catch (error) {
         blocked += 1;
-        const message = error instanceof Error ? error.message : "";
-        toast.error(
-          /domain|verif/i.test(message)
-            ? "Your sender domain is still verifying — finish the DNS records, then retry."
-            : `Could not send to ${person.full_name}. ${message.slice(0, 120)}`,
-        );
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`Could not send to ${person.full_name}: ${message.slice(0, 150)}`);
       }
     }
     setSending(false);
@@ -721,7 +733,7 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
               <AlertDialogTrigger asChild>
                 <Button
                   className="mt-4 w-full"
-                  disabled={eligibleCandidates.length === 0 || sending || !dnsLive}
+                  disabled={eligibleCandidates.length === 0 || sending || dnsLive === false}
                 >
                   <Send className="size-4" />
                   {sending
@@ -857,7 +869,7 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
                   <AlertDialogTrigger asChild>
                     <Button
                       disabled={
-                        !selectedCandidate || !subject.trim() || !body.trim() || sending || !dnsLive
+                        !selectedCandidate || !subject.trim() || !body.trim() || sending || dnsLive === false
                       }
                     >
                       <Send className="size-4" />

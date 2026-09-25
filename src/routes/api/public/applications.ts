@@ -5,7 +5,12 @@ import { APPLICATION_SOURCES, RESUME_ACCEPTED, RESUME_MAX_BYTES } from "@/lib/at
 const Body = z.object({
   jobCode: z.string().trim().min(1).max(64),
   fullName: z.string().trim().min(2).max(120),
-  email: z.string().trim().email().max(180),
+  email: z
+    .string({ required_error: "Email address is required." })
+    .trim()
+    .min(1, "Email address is required.")
+    .email("Enter a valid email address.")
+    .max(180, "Email address is too long."),
   phone: z
     .string()
     .trim()
@@ -23,6 +28,8 @@ const Body = z.object({
   utmMedium: z.string().trim().max(120).optional().or(z.literal("")),
   utmCampaign: z.string().trim().max(120).optional().or(z.literal("")),
 });
+
+export const ApplicationBodySchema = Body;
 
 function bad(message: string, status = 400) {
   return Response.json({ error: message }, { status });

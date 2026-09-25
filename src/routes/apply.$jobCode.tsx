@@ -78,6 +78,7 @@ function ApplyPage() {
 
   function validate(): string | null {
     if (form.fullName.trim().length < 2) return "Enter your full name.";
+    if (!form.email.trim()) return "Enter your email address.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim()))
       return "Enter a valid email address.";
     if (!/^[+0-9][0-9\s\-()]{6,23}$/.test(form.phone.trim())) return "Enter a valid phone number.";
@@ -280,10 +281,12 @@ function ApplyPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
+                      <Label htmlFor="email">Email Address</Label>
                       <Input
                         id="email"
                         type="email"
+                        required
+                        placeholder="you@company.com"
                         value={form.email}
                         onChange={(e) => set("email", e.target.value)}
                       />

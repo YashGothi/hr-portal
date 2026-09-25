@@ -15,10 +15,13 @@ export const Route = createFileRoute("/api/public/offer/$token")({
 
         const result = await resolvePublicOffer(supabaseAdmin, token);
         if (!result.ok) {
-          return Response.json({ error: result.reason }, { status: result.status });
+          return Response.json(
+            { error: result.reason },
+            { status: result.status, headers: { "Cache-Control": "no-store" } },
+          );
         }
 
-        return Response.json(result.offer);
+        return Response.json(result.offer, { headers: { "Cache-Control": "no-store" } });
       },
 
       POST: async ({ params, request }) => {
@@ -29,27 +32,36 @@ export const Route = createFileRoute("/api/public/offer/$token")({
         try {
           body = (await request.json()) as { action?: unknown };
         } catch {
-          return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+          return Response.json(
+            { error: "Invalid JSON body." },
+            { status: 400, headers: { "Cache-Control": "no-store" } },
+          );
         }
 
         const action = body?.action;
         if (action !== "ACCEPT" && action !== "DECLINE") {
           return Response.json(
             { error: "Invalid action. Must be 'ACCEPT' or 'DECLINE'." },
-            { status: 400 },
+            { status: 400, headers: { "Cache-Control": "no-store" } },
           );
         }
 
         const result = await respondToPublicOffer(supabaseAdmin, token, action);
         if (!result.ok) {
-          return Response.json({ error: result.reason }, { status: result.status });
+          return Response.json(
+            { error: result.reason },
+            { status: result.status, headers: { "Cache-Control": "no-store" } },
+          );
         }
 
-        return Response.json({
-          success: true,
-          status: result.status,
-          timestamp: result.timestamp,
-        });
+        return Response.json(
+          {
+            success: true,
+            status: result.status,
+            timestamp: result.timestamp,
+          },
+          { headers: { "Cache-Control": "no-store" } },
+        );
       },
     },
   },

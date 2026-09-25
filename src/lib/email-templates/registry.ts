@@ -8,6 +8,7 @@ import { template as schedulingConfirmationTemplate } from "./scheduling-confirm
 import { template as schedulingHrNoticeTemplate } from "./scheduling-hr-notice";
 import { template as interviewReminderTemplate } from "./interview-reminder";
 import { template as offerLetterTemplate } from "./offer-letter";
+import { template as onboardingInvitationTemplate } from "./onboarding-invitation";
 
 export interface TemplateEntry {
   component: ComponentType<any>;
@@ -27,6 +28,7 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   interview: interviewTemplate,
   "interview-invitation": interviewInvitationTemplate,
   "offer-letter": offerLetterTemplate,
+  "onboarding-invitation": onboardingInvitationTemplate,
   hired: hiredTemplate,
   rejected: rejectedTemplate,
   "scheduling-confirmation": schedulingConfirmationTemplate,

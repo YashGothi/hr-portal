@@ -9,6 +9,7 @@ import {
   CalendarDays,
   CalendarClock,
   Mail,
+  BarChart3,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +36,7 @@ const NAV = [
     description: "Auto mailer & Templates",
     icon: Mail,
   },
+  { to: "/analytics", label: "Analytics", description: "Reports & metrics", icon: BarChart3 },
 ] as const;
 
 export function AppShell({
