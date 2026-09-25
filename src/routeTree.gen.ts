@@ -19,6 +19,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedEmailDispatchRouteImport } from './routes/_authenticated/email-dispatch'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
+import { Route as AuthenticatedPayslipRouteImport } from './routes/_authenticated/payslip'
 import { Route as AuthenticatedSchedulingRouteImport } from './routes/_authenticated/scheduling'
 import { Route as ApplyJobCodeRouteImport } from './routes/apply.$jobCode'
 import { Route as ConfirmTokenRouteImport } from './routes/confirm.$token'
@@ -89,6 +90,11 @@ const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
 const AuthenticatedJobsRoute = AuthenticatedJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPayslipRoute = AuthenticatedPayslipRouteImport.update({
+  id: '/payslip',
+  path: '/payslip',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSchedulingRoute = AuthenticatedSchedulingRouteImport.update({
@@ -216,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/email-dispatch': typeof AuthenticatedEmailDispatchRoute
   '/import': typeof AuthenticatedImportRoute
   '/jobs': typeof AuthenticatedJobsRoute
+  '/payslip': typeof AuthenticatedPayslipRoute
   '/scheduling': typeof AuthenticatedSchedulingRoute
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByTo {
   '/email-dispatch': typeof AuthenticatedEmailDispatchRoute
   '/import': typeof AuthenticatedImportRoute
   '/jobs': typeof AuthenticatedJobsRoute
+  '/payslip': typeof AuthenticatedPayslipRoute
   '/scheduling': typeof AuthenticatedSchedulingRoute
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
@@ -282,6 +290,7 @@ export interface FileRoutesById {
   '/_authenticated/email-dispatch': typeof AuthenticatedEmailDispatchRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/jobs': typeof AuthenticatedJobsRoute
+  '/_authenticated/payslip': typeof AuthenticatedPayslipRoute
   '/_authenticated/scheduling': typeof AuthenticatedSchedulingRoute
   '/apply/$jobCode': typeof ApplyJobCodeRoute
   '/confirm/$token': typeof ConfirmTokenRoute
@@ -316,6 +325,7 @@ export interface FileRouteTypes {
     | '/email-dispatch'
     | '/import'
     | '/jobs'
+    | '/payslip'
     | '/scheduling'
     | '/apply/$jobCode'
     | '/confirm/$token'
@@ -348,6 +358,7 @@ export interface FileRouteTypes {
     | '/email-dispatch'
     | '/import'
     | '/jobs'
+    | '/payslip'
     | '/scheduling'
     | '/apply/$jobCode'
     | '/confirm/$token'
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/_authenticated/email-dispatch'
     | '/_authenticated/import'
     | '/_authenticated/jobs'
+    | '/_authenticated/payslip'
     | '/_authenticated/scheduling'
     | '/apply/$jobCode'
     | '/confirm/$token'
@@ -498,6 +510,13 @@ declare module '@tanstack/react-router' {
       path: '/jobs'
       fullPath: '/jobs'
       preLoaderRoute: typeof AuthenticatedJobsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/payslip': {
+      id: '/_authenticated/payslip'
+      path: '/payslip'
+      fullPath: '/payslip'
+      preLoaderRoute: typeof AuthenticatedPayslipRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/scheduling': {
@@ -657,6 +676,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedEmailDispatchRoute: typeof AuthenticatedEmailDispatchRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedJobsRoute: typeof AuthenticatedJobsRoute
+  AuthenticatedPayslipRoute: typeof AuthenticatedPayslipRoute
   AuthenticatedSchedulingRoute: typeof AuthenticatedSchedulingRoute
   AuthenticatedCandidatesCandidateIdRoute: typeof AuthenticatedCandidatesCandidateIdRoute
   AuthenticatedCandidatesCompareRoute: typeof AuthenticatedCandidatesCompareRoute
@@ -670,6 +690,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEmailDispatchRoute: AuthenticatedEmailDispatchRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedJobsRoute: AuthenticatedJobsRoute,
+  AuthenticatedPayslipRoute: AuthenticatedPayslipRoute,
   AuthenticatedSchedulingRoute: AuthenticatedSchedulingRoute,
   AuthenticatedCandidatesCandidateIdRoute:
     AuthenticatedCandidatesCandidateIdRoute,

@@ -10,6 +10,7 @@ import {
   CalendarClock,
   Mail,
   BarChart3,
+  Receipt,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +36,12 @@ const NAV = [
     label: "Email Dispatch",
     description: "Auto mailer & Templates",
     icon: Mail,
+  },
+  {
+    to: "/payslip",
+    label: "Payslips",
+    description: "Salary & Generator",
+    icon: Receipt,
   },
   { to: "/analytics", label: "Analytics", description: "Reports & metrics", icon: BarChart3 },
 ] as const;
