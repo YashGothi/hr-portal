@@ -522,7 +522,7 @@ export function EmailDispatchPage(props: EmailDispatchPageProps = {}) {
           blocked += 1;
           toast.warning(
             result.reason === "recipient_suppressed"
-              ? `${person.full_name}: not sent — this address previously bounced or opted out.`
+              ? `${person.full_name}: not sent — ${result.details || "this address previously bounced, opted out, or requires domain verification in Resend."}`
               : `${person.full_name}: not sent — no email address on file.`,
           );
         }

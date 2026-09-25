@@ -15,7 +15,8 @@ const SENDER_DOMAIN = "hr.seceon.com";
 const FROM_DOMAIN = "hr.seceon.com";
 
 export type SendTemplateEmailResult =
-  { sent: true } | { sent: false; reason: "recipient_suppressed" };
+  | { sent: true }
+  | { sent: false; reason: "recipient_suppressed"; details?: string | undefined };
 
 export interface SendTemplateEmailOptions {
   templateData?: Record<string, any>;
@@ -102,7 +103,11 @@ export async function sendTemplateEmail(
           errorData.message?.toLowerCase().includes("suppressed") ||
           errorData.message?.toLowerCase().includes("bounced")
         ) {
-          return { sent: false, reason: "recipient_suppressed" };
+          return {
+            sent: false,
+            reason: "recipient_suppressed",
+            details: errorData.message || undefined,
+          };
         }
         throw new Error(
           `Resend API error (${res.status}): ${errorData.message || res.statusText}`,

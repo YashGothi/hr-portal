@@ -16,7 +16,8 @@ const DispatchInput = z.object({
 });
 
 export type DispatchResult =
-  { sent: true } | { sent: false; reason: "recipient_suppressed" | "no_email" };
+  | { sent: true }
+  | { sent: false; reason: "recipient_suppressed" | "no_email"; details?: string | undefined };
 
 /**
  * Sends one personalized candidate email from Email Dispatch. One call sends
